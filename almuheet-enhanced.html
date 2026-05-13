@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<script>
+  (function () {
+    if (location.protocol === 'file:') return;
+    var p = location.pathname || '';
+    if (p.endsWith('/') || /\.(html?|php)$/i.test(p)) return;
+    if (p === '/' || p === '') return;
+    var b = document.createElement('base');
+    b.href = location.origin + p + '/';
+    document.head.insertBefore(b, document.head.firstChild);
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة العقود - المحيط للاستشارات (المحسّن)</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232da876'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./almuheet-app.css">
+</head>
+<body>
+
+<!-- ───────────────────────────────── LOGIN ───────────────────────────────── -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="co-name">المحيط للاستشارات</div>
+      <div class="co-sub">AL MUHEET ENGINEERING CONSULTING</div>
+    </div>
+    <div class="role-tabs" id="roleTabs">
+      <div class="role-tab active" onclick="selectRole(this,'admin')">مدير النظام</div>
+      <div class="role-tab" onclick="selectRole(this,'engineer')">مهندس</div>
+      <div class="role-tab" onclick="selectRole(this,'accountant')">محاسب</div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>كلمة المرور</label>
+      <input type="password" id="passInput" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="primary" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">دخول</button>
+    <div class="login-err" id="loginErr">كلمة المرور غير صحيحة</div>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-top:12px">📞 30503076 - 40296739 | رخصة 164638</div>
+</div>
+
+<!-- ───────────────────────────────── APP ───────────────────────────────── -->
+<div class="app" id="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-logo">⬡ المحيط</div>
+    <div class="topbar-nav" style="flex-direction:row-reverse;margin-right:0;margin-left:auto">
+      <button class="nav-item active" onclick="showPage('dashboard',this)">📊 لوحة القيادة</button>
+      <button class="nav-item" onclick="showPage('contracts',this)">📋 العقود</button>
+      <button class="nav-item" onclick="showPage('payments',this)">💰 الدفعات</button>
+      <button class="nav-item" onclick="showPage('visits',this)">🚧 الزيارات</button>
+      <button class="nav-item" onclick="showPage('archive',this)">📁 الأرشيف</button>
+      <button class="nav-item" onclick="showPage('reports',this)">📈 التقارير</button>
+      <button class="nav-item" onclick="showPage('audit',this)">🔒 سجل النشاط</button>
+    </div>
+    <button class="ghost" onclick="toggleNotif()" id="notifBtn" style="position:relative" data-tip="الإشعارات">
+      🔔
+      <span id="notifCount" style="position:absolute;top:-3px;left:-3px;background:var(--red2);color:#fff;font-size:9px;padding:0 4px;border-radius:8px;min-width:15px;text-align:center">5</span>
+    </button>
+    <button class="ghost" onclick="toggleTheme()" data-tip="تبديل المظهر">🌓</button>
+    <div class="topbar-user">
+      <div class="avatar" id="userAvatar">م</div>
+      <div>
+        <div id="userName" style="font-size:12px;color:var(--text1)">مدير النظام</div>
+        <div id="userRole" class="role-badge role-admin">Admin</div>
+      </div>
+      <div id="cloudStatus" style="font-size:11px;color:var(--text3);padding:2px 8px;border:1px solid var(--border);border-radius:10px">☁️ محلي</div>
+      <button class="ghost" onclick="logout()" data-tip="خروج">⇤</button>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION PANEL -->
+  <div class="notif-panel" id="notifPanel">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;font-weight:600">الإشعارات</span>
+      <button class="ghost" style="font-size:11px" onclick="markAllRead()">تحديد الكل كمقروء</button>
+    </div>
+    <div class="notif-item unread"><div class="notif-dot red"></div><div class="notif-text"><strong>عقد #1045</strong> — ينتهي خلال 7 أيام<br><span style="font-size:11px;color:var(--text3)">قبل 2 ساعة</span></div></div>
+    <div class="notif-item unread"><div class="notif-dot amber"></div><div class="notif-text"><strong>رخصة بناء #2234</strong> — تنتهي بعد 15 يوم<br><span style="font-size:11px;color:var(--text3)">قبل 5 ساعات</span></div></div>
+    <div class="notif-item unread"><div class="notif-dot amber"></div><div class="notif-text"><strong>عقد #1038</strong> — لم يُزَر منذ 35 يوماً<br><span style="font-size:11px;color:var(--text3)">أمس</span></div></div>
+    <div class="notif-item unread"><div class="notif-dot blue"></div><div class="notif-text"><strong>دفعة جديدة</strong> — عقد #1031، 8,500 ر.ق<br><span style="font-size:11px;color:var(--text3)">أمس</span></div></div>
+    <div class="notif-item unread"><div class="notif-dot green"></div><div class="notif-text"><strong>عقد #1029</strong> — مكتمل بنجاح<br><span style="font-size:11px;color:var(--text3)">منذ يومين</span></div></div>
+    <div class="notif-item"><div class="notif-dot" style="background:var(--text3)"></div><div class="notif-text"><strong>تقرير أبريل</strong> — جاهز للتصدير<br><span style="font-size:11px;color:var(--text3)">منذ 3 أيام</span></div></div>
+  </div>
+
+  <div class="main">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-section">الرئيسية</div>
+      <button class="sidebar-item active" onclick="showPage('dashboard',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        لوحة القيادة
+      </button>
+      <button class="sidebar-item" onclick="showPage('contracts',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        العقود <span class="sidebar-count" id="sc-contracts">0</span>
+      </button>
+      <button class="sidebar-item" onclick="showPage('payments',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        الدفعات
+      </button>
+      <div class="sidebar-section">الميدان</div>
+      <button class="sidebar-item" onclick="showPage('visits',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 0 1-2.827 0l-4.244-4.243a8 8 0 1 1 11.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
+        الزيارات الميدانية <span class="sidebar-count" id="sc-visits">0</span>
+      </button>
+      <div class="sidebar-section">الإدارة</div>
+      <button class="sidebar-item" onclick="showPage('archive',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        الأرشيف <span class="sidebar-count aging-danger" id="sc-archive">3</span>
+      </button>
+      <button class="sidebar-item" onclick="showPage('reports',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        التقارير
+      </button>
+      <button class="sidebar-item" onclick="showPage('audit',null,this)">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        سجل النشاط
+      </button>
+      <div style="margin-top:auto;padding-top:20px">
+        <button class="sidebar-item" onclick="showPage('settings',null,this)">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          الإعدادات
+        </button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ═══════════════ DASHBOARD ═══════════════ -->
+      <div class="page active" id="page-dashboard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div>
+            <div style="font-size:20px;font-weight:700">لوحة القيادة</div>
+            <div style="font-size:12px;color:var(--text3)" id="dashDate">تحميل...</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="openNewContract()">➕ عقد جديد</button>
+            <button onclick="exportData()">📤 تصدير</button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card g"><div class="kpi-label">إجمالي العقود</div><div class="kpi-val" id="kpi-total">0</div><div class="kpi-sub">نشط / مكتمل / مجمّد</div></div>
+          <div class="kpi-card b"><div class="kpi-label">إجمالي القيمة</div><div class="kpi-val" id="kpi-value">0</div><div class="kpi-sub">ر.ق</div></div>
+          <div class="kpi-card a"><div class="kpi-label">المحصّل</div><div class="kpi-val" id="kpi-collected">0</div><div class="kpi-sub">ر.ق — <span id="kpi-pct">0</span>% من الإجمالي</div></div>
+          <div class="kpi-card r"><div class="kpi-label">المتبقي</div><div class="kpi-val" id="kpi-remain">0</div><div class="kpi-sub">ر.ق</div></div>
+          <div class="kpi-card p"><div class="kpi-label">عقود متأخرة</div><div class="kpi-val" id="kpi-late">0</div><div class="kpi-sub">تجاوزت الموعد</div></div>
+        </div>
+
+        <!-- ALERTS -->
+        <div id="dashAlerts"></div>
+
+        <!-- TWO COLUMNS -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <!-- Status chart -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">حالات العقود</div></div>
+            <div id="statusChart" style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:10px;height:10px;border-radius:50%;background:var(--accent2)"></div><span style="flex:1;font-size:13px;color:var(--text2)">نشط</span><span style="font-family:var(--mono);font-size:13px" id="st-active">0</span><div class="progress-bar" style="flex:2"><div class="progress-fill g" id="sp-active" style="width:0%"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:10px;height:10px;border-radius:50%;background:var(--blue2)"></div><span style="flex:1;font-size:13px;color:var(--text2)">مكتمل</span><span style="font-family:var(--mono);font-size:13px" id="st-done">0</span><div class="progress-bar" style="flex:2"><div class="progress-fill g" id="sp-done" style="width:0%;background:var(--blue2)"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:10px;height:10px;border-radius:50%;background:var(--purple2)"></div><span style="flex:1;font-size:13px;color:var(--text2)">مجمّد</span><span style="font-family:var(--mono);font-size:13px" id="st-frozen">0</span><div class="progress-bar" style="flex:2"><div class="progress-fill g" id="sp-frozen" style="width:0%;background:var(--purple2)"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:10px;height:10px;border-radius:50%;background:var(--red2)"></div><span style="flex:1;font-size:13px;color:var(--text2)">منتهي</span><span style="font-family:var(--mono);font-size:13px" id="st-ended">0</span><div class="progress-bar" style="flex:2"><div class="progress-fill g" id="sp-ended" style="width:0%;background:var(--red2)"></div></div></div>
+            </div>
+          </div>
+          <!-- Monthly chart -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">التحصيل الشهري</div></div>
+            <div class="sparkline" id="monthlyChart">
+              <div class="spark-bar" style="height:40%" title="يناير"></div>
+              <div class="spark-bar" style="height:60%" title="فبراير"></div>
+              <div class="spark-bar" style="height:45%" title="مارس"></div>
+              <div class="spark-bar" style="height:75%" title="أبريل"></div>
+              <div class="spark-bar highlight" style="height:55%" title="مايو"></div>
+              <div class="spark-bar" style="height:20%" title="يونيو"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px">
+              <span>يناير</span><span>فبراير</span><span>مارس</span><span>أبريل</span><span>مايو</span><span>يونيو</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TODAY SUMMARY + RECENT CONTRACTS -->
+        <div style="display:grid;grid-template-columns:280px 1fr;gap:16px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">ملخص اليوم</div></div>
+            <div class="stat-row"><span class="stat-label">🚧 زيارات اليوم</span><span class="stat-val" id="td-visits">0</span></div>
+            <div class="stat-row"><span class="stat-label">💵 دفعات هذا الأسبوع</span><span class="stat-val" id="td-payments">0</span></div>
+            <div class="stat-row"><span class="stat-label">⚠️ تنتهي قريباً</span><span class="stat-val" id="td-expiring" style="color:var(--amber2)">0</span></div>
+            <div class="stat-row"><span class="stat-label">✅ مكتملة هذا الشهر</span><span class="stat-val" id="td-done">0</span></div>
+            <div class="stat-row"><span class="stat-label">📋 بدون زيارة (30+ يوم)</span><span class="stat-val" id="td-novisit" style="color:var(--red2)">0</span></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">أحدث العقود</div>
+              <button class="ghost" style="font-size:12px" onclick="showPage('contracts')">عرض الكل ←</button>
+            </div>
+            <table style="width:100%">
+              <thead><tr>
+                <th>رقم العقد</th><th>المالك</th><th>النوع</th><th>الحالة</th><th>نسبة التحصيل</th>
+              </tr></thead>
+              <tbody id="recentContracts">
+                <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">لا توجد عقود بعد — أضف عقداً جديداً</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ CONTRACTS ═══════════════ -->
+      <div class="page" id="page-contracts">
+        <div class="section-header">
+          <div class="section-title">📋 إدارة العقود</div>
+          <div class="section-actions">
+            <button onclick="openNewContract()" class="primary">➕ عقد جديد</button>
+            <button onclick="exportData()">📤 تصدير Excel</button>
+            <button onclick="importData()">📥 استيراد</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <div class="search-box">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="بحث بالاسم أو رقم العقد أو الهوية..." oninput="filterContracts(this.value)">
+            </div>
+            <select onchange="filterContracts()" id="fStatus" style="width:auto">
+              <option value="">كل الحالات</option>
+              <option value="نشط">نشط</option>
+              <option value="مكتمل">مكتمل</option>
+              <option value="مجمّد">مجمّد</option>
+              <option value="منتهي">منتهي</option>
+            </select>
+            <select onchange="filterContracts()" id="fType" style="width:auto">
+              <option value="">كل الأنواع</option>
+              <option value="كامل">كامل</option>
+              <option value="عظم">عظم</option>
+              <option value="تشطيب">تشطيب</option>
+            </select>
+            <select onchange="filterContracts()" id="fEng" style="width:auto" id="fEng">
+              <option value="">كل المهندسين</option>
+            </select>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortBy('id')">رقم العقد ↕</th>
+                <th onclick="sortBy('owner')">المالك ↕</th>
+                <th>رقم التواصل</th>
+                <th onclick="sortBy('type')">النوع ↕</th>
+                <th onclick="sortBy('status')">الحالة ↕</th>
+                <th>المهندس</th>
+                <th onclick="sortBy('value')">القيمة ↕</th>
+                <th>التحصيل</th>
+                <th onclick="sortBy('end')">النهاية ↕</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="contractsTable">
+              <tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود مضافة بعد</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════ PAYMENTS ═══════════════ -->
+      <div class="page" id="page-payments">
+        <div class="section-header">
+          <div class="section-title">💰 تتبع الدفعات</div>
+          <div class="section-actions">
+            <button onclick="window.print()">🖨️ طباعة</button>
+            <button onclick="exportData()">📊 Excel</button>
+          </div>
+        </div>
+        <!-- Debt Aging Summary -->
+        <div style="margin-bottom:20px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)">📊 تقرير عمر الديون</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+            <div class="card" style="text-align:center;border-top:3px solid var(--accent2)">
+              <div style="font-size:11px;color:var(--text3)">0 — 30 يوم</div>
+              <div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--accent2)" id="aging-30">0</div>
+              <div style="font-size:10px;color:var(--text3)">ر.ق</div>
+            </div>
+            <div class="card" style="text-align:center;border-top:3px solid var(--amber2)">
+              <div style="font-size:11px;color:var(--text3)">31 — 60 يوم</div>
+              <div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--amber2)" id="aging-60">0</div>
+              <div style="font-size:10px;color:var(--text3)">ر.ق</div>
+            </div>
+            <div class="card" style="text-align:center;border-top:3px solid var(--purple2)">
+              <div style="font-size:11px;color:var(--text3)">61 — 90 يوم</div>
+              <div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--purple2)" id="aging-90">0</div>
+              <div style="font-size:10px;color:var(--text3)">ر.ق</div>
+            </div>
+            <div class="card" style="text-align:center;border-top:3px solid var(--red2)">
+              <div style="font-size:11px;color:var(--text3)">+90 يوم</div>
+              <div style="font-size:20px;font-weight:600;font-family:var(--mono);color:var(--red2)" id="aging-90p">0</div>
+              <div style="font-size:10px;color:var(--text3)">ر.ق</div>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <select style="width:auto" id="payFilter" onchange="refreshPayments()">
+              <option value="">كل العقود</option>
+            </select>
+            <select style="width:auto" id="payMonth" onchange="refreshPayments()">
+              <option value="">كل الأشهر</option>
+              <option>يناير</option><option>فبراير</option><option>مارس</option><option>أبريل</option>
+              <option>مايو</option><option>يونيو</option><option>يوليو</option><option>أغسطس</option>
+              <option>سبتمبر</option><option>أكتوبر</option><option>نوفمبر</option><option>ديسمبر</option>
+            </select>
+          </div>
+          <table>
+            <thead><tr>
+              <th>العقد</th><th>العميل</th><th>المبلغ</th><th>التاريخ</th><th>التصنيف</th><th>رقم السند</th><th>عمر الدين</th><th>إجراء</th>
+            </tr></thead>
+            <tbody id="paymentsTable">
+              <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:30px">لا توجد دفعات مسجلة</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════ VISITS ═══════════════ -->
+      <div class="page" id="page-visits">
+        <div class="section-header">
+          <div class="section-title">🚧 الزيارات الميدانية</div>
+          <div class="section-actions">
+            <button class="primary" onclick="openVisitModal()">➕ تسجيل زيارة</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px">مقارنة نسبة الإنجاز</div>
+            <div id="visitProgress" style="display:flex;flex-direction:column;gap:10px">
+              <div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">لا توجد زيارات مسجلة</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:12px">آخر المخالفات المرصودة</div>
+            <div id="visitViolations" style="font-size:13px;color:var(--text3);text-align:center;padding:20px">لا توجد مخالفات مسجلة</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>التاريخ</th><th>العقد</th><th>المالك</th><th>المرحلة</th><th>نسبة الإنجاز</th><th>المهندس</th><th>المخالفات</th><th>ملاحظات</th>
+            </tr></thead>
+            <tbody id="visitsTable">
+              <tr><td colspan="8" style="text-align:center;color:var(--text3);padding:30px">لا توجد زيارات مسجلة</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══════════════ ARCHIVE ═══════════════ -->
+      <div class="page" id="page-archive">
+        <div class="section-header">
+          <div class="section-title">📁 الأرشيف</div>
+          <div class="section-actions">
+            <button onclick="exportArchive()">📊 تصدير الأرشيف</button>
+          </div>
+        </div>
+
+        <!-- Archive Summary -->
+        <div class="archive-summary" id="archiveSummary">
+          <div class="arch-stat">
+            <div class="arch-stat-val" id="arch-ended">0</div>
+            <div class="arch-stat-lbl">عقود منتهية</div>
+          </div>
+          <div class="arch-stat">
+            <div class="arch-stat-val" id="arch-totalval" style="color:var(--accent2)">0</div>
+            <div class="arch-stat-lbl">إجمالي القيم (ر.ق)</div>
+          </div>
+          <div class="arch-stat">
+            <div class="arch-stat-val" id="arch-collected" style="color:var(--blue2)">0</div>
+            <div class="arch-stat-lbl">المحصّل (ر.ق)</div>
+          </div>
+          <div class="arch-stat">
+            <div class="arch-stat-val" id="arch-uncollected" style="color:var(--red2)">0</div>
+            <div class="arch-stat-lbl">غير مستوفى (ر.ق)</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="archiveTab(this,'arch-contracts')">📄 أرشيف العقود</div>
+          <div class="tab" onclick="archiveTab(this,'arch-visits')">🚧 أرشيف الزيارات</div>
+          <div class="tab" onclick="archiveTab(this,'arch-licenses')">⚠️ تنبيهات الرخص</div>
+          <div class="tab" onclick="archiveTab(this,'arch-docs')">🗂️ الأرشيف المركزي</div>
+        </div>
+
+        <!-- ARCHIVE: CONTRACTS -->
+        <div id="arch-contracts">
+          <div class="table-wrap">
+            <div class="table-toolbar">
+              <select style="width:auto" id="archYear"><option value="">كل السنوات</option><option>2024</option><option>2025</option><option>2026</option></select>
+              <select style="width:auto" id="archEngFilter"><option value="">كل المهندسين</option></select>
+              <select style="width:auto" id="archTypeFilter"><option value="">كل الأنواع</option><option>كامل</option><option>عظم</option><option>تشطيب</option></select>
+              <select style="width:auto" id="archRegion"><option value="">كل المناطق</option></select>
+            </div>
+            <table>
+              <thead><tr>
+                <th>رقم العقد</th><th>المالك</th><th>النوع</th><th>المهندس</th><th>القيمة</th><th>المحصّل</th><th>المتبقي</th><th>تاريخ الانتهاء</th><th>إجراءات</th>
+              </tr></thead>
+              <tbody id="archContractsTable">
+                <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود منتهية في الأرشيف</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ARCHIVE: VISITS -->
+        <div id="arch-visits" style="display:none">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>التاريخ</th><th>العقد</th><th>المالك</th><th>المرحلة</th><th>نسبة الإنجاز</th><th>المهندس</th><th>المخالفات</th>
+              </tr></thead>
+              <tbody id="archVisitsTable">
+                <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:30px">لا توجد زيارات مؤرشفة</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ARCHIVE: LICENSES -->
+        <div id="arch-licenses" style="display:none">
+          <div id="licensesContainer">
+            <div style="text-align:center;color:var(--text3);padding:40px;font-size:13px">لا توجد رخص مسجلة حالياً</div>
+          </div>
+        </div>
+
+        <!-- ARCHIVE: CENTRAL DOCS -->
+        <div id="arch-docs" style="display:none">
+          <div class="table-toolbar" style="background:var(--bg2);border-radius:var(--r2);margin-bottom:12px;border:1px solid var(--border)">
+            <div class="search-box" style="flex:1">
+              <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="بحث في المستندات...">
+            </div>
+            <select style="width:auto">
+              <option>كل الأنواع</option><option>رخصة</option><option>مخططات</option><option>صور</option><option>مراسلات</option>
+            </select>
+          </div>
+          <div style="text-align:center;color:var(--text3);padding:40px;font-size:13px">📁 المستندات المركزية ستظهر هنا عند إضافة عقود تحتوي على مرفقات</div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ REPORTS ═══════════════ -->
+      <div class="page" id="page-reports">
+        <div class="section-header">
+          <div class="section-title">📈 التقارير المتقدمة</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('monthly')">
+            <div style="font-size:22px">📊</div><div style="font-size:13px;font-weight:600">تقرير شهري</div>
+            <div style="font-size:11px;color:var(--text3)">ملخص الشهر الحالي</div>
+          </button>
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('quarterly')">
+            <div style="font-size:22px">📊</div><div style="font-size:13px;font-weight:600">تقرير ربع سنوي</div>
+            <div style="font-size:11px;color:var(--text3)">3 أشهر متراكمة</div>
+          </button>
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('yearly')">
+            <div style="font-size:22px">📊</div><div style="font-size:13px;font-weight:600">تقرير سنوي</div>
+            <div style="font-size:11px;color:var(--text3)">السنة الكاملة</div>
+          </button>
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('engineers')">
+            <div style="font-size:22px">👷</div><div style="font-size:13px;font-weight:600">أداء المهندسين</div>
+            <div style="font-size:11px;color:var(--text3)">عدد الزيارات والعقود</div>
+          </button>
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('clients')">
+            <div style="font-size:22px">👤</div><div style="font-size:13px;font-weight:600">تحليل العملاء</div>
+            <div style="font-size:11px;color:var(--text3)">تاريخ ومعدلات الدفع</div>
+          </button>
+          <button style="padding:18px;flex-direction:column;gap:6px;height:auto" onclick="genReport('aging')">
+            <div style="font-size:22px">⏳</div><div style="font-size:13px;font-weight:600">تقرير عمر الديون</div>
+            <div style="font-size:11px;color:var(--text3)">تصنيف حسب الأيام</div>
+          </button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button onclick="exportReportCsv()">📄 تصدير التقرير الحالي CSV</button>
+        </div>
+        <div id="reportOutput" style="display:none"></div>
+      </div>
+
+      <!-- ═══════════════ AUDIT LOG ═══════════════ -->
+      <div class="page" id="page-audit">
+        <div class="section-header">
+          <div class="section-title">🔒 سجل النشاط والتدقيق</div>
+          <div class="section-actions">
+            <button onclick="exportAudit()">📤 تصدير السجل</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <select style="width:auto" id="auditFilter">
+              <option value="">كل الأنشطة</option>
+              <option value="create">إنشاء</option>
+              <option value="edit">تعديل</option>
+              <option value="delete">حذف</option>
+              <option value="login">تسجيل دخول</option>
+            </select>
+          </div>
+          <div id="auditLog">
+            <div class="audit-item">
+              <div class="audit-icon" style="background:rgba(45,168,118,.1);color:var(--accent2)">🔑</div>
+              <div class="audit-text"><strong>مدير النظام</strong> سجّل دخوله للنظام</div>
+              <div class="audit-time" id="auditNow">الآن</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ SETTINGS ═══════════════ -->
+      <div class="page" id="page-settings">
+        <div class="section-title" style="margin-bottom:20px">⚙️ الإعدادات</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px">كلمات المرور</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="form-group"><label>كلمة مرور مدير النظام</label><input type="password" id="pw-admin" placeholder="••••••••"></div>
+              <div class="form-group"><label>كلمة مرور المهندس</label><input type="password" id="pw-eng" placeholder="••••••••"></div>
+              <div class="form-group"><label>كلمة مرور المحاسب</label><input type="password" id="pw-acc" placeholder="••••••••"></div>
+              <button class="primary" onclick="savePasswords()">💾 حفظ كلمات المرور</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px">معلومات المكتب</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="form-group"><label>اسم المكتب (عربي)</label><input type="text" value="المحيط للاستشارات الهندسية"></div>
+              <div class="form-group"><label>اسم المكتب (إنجليزي)</label><input type="text" value="AL MUHEET ENGINEERING CONSULTING"></div>
+              <div class="form-group"><label>رقم الرخصة</label><input type="text" value="164638"></div>
+              <div class="form-group"><label>أرقام التواصل</label><input type="text" value="30503076 - 40296739"></div>
+              <button class="primary" onclick="saveSettings()">💾 حفظ</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px">النسخ الاحتياطي</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <button onclick="exportData()">📤 تصدير نسخة JSON كاملة</button>
+              <button onclick="importData()">📥 استيراد نسخة JSON</button>
+              <button class="danger" onclick="resetSystemData()">🧹 تصفير بيانات النظام</button>
+              <div style="font-size:11px;color:var(--text3)">
+                ينصح بأخذ نسخة احتياطية أسبوعياً قبل أي تعديل كبير.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<!-- NEW CONTRACT MODAL -->
+<div class="modal-overlay" id="contractModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="contractModalTitle">➕ إضافة عقد جديد</div>
+      <button class="ghost" onclick="closeModal('contractModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" style="margin-bottom:16px">
+        <div class="tab active" onclick="contractTab(this,'ct-basic')">🔷 معلومات العقد</div>
+        <div class="tab" onclick="contractTab(this,'ct-project')">🏗️ المشروع</div>
+        <div class="tab" onclick="contractTab(this,'ct-engineer')">👷 المهندس</div>
+        <div class="tab" onclick="contractTab(this,'ct-payments')">💰 الدفعات</div>
+        <div class="tab" onclick="contractTab(this,'ct-license')">📄 الرخصة</div>
+      </div>
+      <!-- BASIC -->
+      <div id="ct-basic">
+        <div class="form-grid">
+          <div class="form-group"><label>رقم العقد *</label><input type="text" id="f-id" placeholder="مثال: 1045"></div>
+          <div class="form-group"><label>الحالة</label>
+            <select id="f-status"><option>نشط</option><option>منتهي</option><option>مجمّد</option><option>مكتمل</option></select>
+          </div>
+          <div class="form-group"><label>اسم المالك *</label><input type="text" id="f-owner" placeholder="اسم المالك"></div>
+          <div class="form-group"><label>رقم التواصل</label><input type="text" id="f-phone" placeholder="974-XXXXXXXX"></div>
+          <div class="form-group"><label>رقم الهوية</label><input type="text" id="f-ownerId" placeholder="رقم البطاقة"></div>
+          <div class="form-group"><label>نوع الإشراف</label>
+            <select id="f-type"><option>كامل</option><option>عظم</option><option>تشطيب</option></select>
+          </div>
+          <div class="form-group"><label>طريقة الدفع</label>
+            <select id="f-paymethod"><option>شهري</option><option>مقطوعية</option></select>
+          </div>
+          <div class="form-group"><label>المدة (أشهر)</label><input type="number" id="f-duration" placeholder="12" min="1"></div>
+          <div class="form-group"><label>تاريخ البداية</label><input type="date" id="f-start"></div>
+          <div class="form-group"><label>تاريخ النهاية</label><input type="date" id="f-end"></div>
+          <div class="form-group span2"><label>قيمة العقد (ر.ق) *</label><input type="number" id="f-value" placeholder="0.00" min="0" step="0.01"></div>
+        </div>
+      </div>
+      <!-- PROJECT -->
+      <div id="ct-project" style="display:none">
+        <div class="form-grid">
+          <div class="form-group"><label>رقم القطعة / الملكية</label><input type="text" id="f-land" placeholder="رقم الملكية"></div>
+          <div class="form-group"><label>الموقع / المنطقة</label><input type="text" id="f-location" placeholder="المنطقة"></div>
+          <div class="form-group"><label>رخصة البناء</label><input type="text" id="f-buildLic" placeholder="رقم الرخصة"></div>
+          <div class="form-group"><label>تاريخ انتهاء الرخصة</label><input type="date" id="f-licExpiry"></div>
+          <div class="form-group span2"><label>ملاحظات المشروع</label><textarea id="f-notes" rows="3" placeholder="تفاصيل إضافية..."></textarea></div>
+        </div>
+      </div>
+      <!-- ENGINEER -->
+      <div id="ct-engineer" style="display:none">
+        <div class="form-grid">
+          <div class="form-group"><label>اسم المهندس المشرف</label><input type="text" id="f-engName" placeholder="اسم المهندس"></div>
+          <div class="form-group"><label>رقم التواصل</label><input type="text" id="f-engPhone" placeholder="رقم الهاتف"></div>
+          <div class="form-group span2"><label>رقم القيد المهني</label><input type="text" id="f-engReg" placeholder="رقم القيد"></div>
+        </div>
+      </div>
+      <!-- PAYMENTS STAGES -->
+      <div id="ct-payments" style="display:none">
+        <div id="payStages"></div>
+        <button onclick="addPayStage()" style="margin-bottom:14px">➕ إضافة مرحلة دفع</button>
+        <div style="border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">تسجيل دفعة جديدة</div>
+          <div class="form-grid">
+            <div class="form-group"><label>المبلغ (ر.ق)</label><input type="number" id="p-amount" placeholder="0.00"></div>
+            <div class="form-group"><label>التاريخ</label><input type="date" id="p-date"></div>
+            <div class="form-group"><label>التصنيف</label>
+              <select id="p-type"><option>دفعة</option><option>مقدمة</option><option>مرحلية</option><option>أخيرة</option></select>
+            </div>
+            <div class="form-group"><label>رقم السند</label><input type="text" id="p-ref" placeholder="رقم السند"></div>
+            <div class="form-group span2"><label>ملاحظة</label><input type="text" id="p-note" placeholder="ملاحظة..."></div>
+          </div>
+          <button onclick="addPaymentToForm()">➕ إضافة دفعة</button>
+          <div id="paymentsList" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <!-- LICENSE -->
+      <div id="ct-license" style="display:none">
+        <div class="alert info">💡 بيانات التعهد ستُستخدم في طباعة نموذج التعهد الرسمي للبلدية</div>
+        <div class="form-grid">
+          <div class="form-group"><label>رقم طلب البناء</label><input type="text" id="tpl-req" placeholder="مثال: 2026/1/0123"></div>
+          <div class="form-group"><label>اسم المنطقة</label><input type="text" id="tpl-area" placeholder="اسم المنطقة"></div>
+          <div class="form-group"><label>رقم مخطط الملكية</label><input type="text" id="tpl-plot" placeholder="رقم المخطط"></div>
+          <div class="form-group"><label>مكونات المبنى</label><input type="text" id="tpl-comp" placeholder="مثال: أرضي + 2 طابق"></div>
+        </div>
+        <button style="margin-top:10px" onclick="printPledge()">🖨️ طباعة التعهد</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('contractModal')">إلغاء</button>
+      <button class="primary" onclick="saveContract()">💾 حفظ العقد</button>
+    </div>
+  </div>
+</div>
+
+<!-- VISIT MODAL -->
+<div class="modal-overlay" id="visitModal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <div class="modal-title">🚧 تسجيل زيارة ميدانية</div>
+      <button class="ghost" onclick="closeModal('visitModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label>التاريخ</label><input type="date" id="v-date"></div>
+        <div class="form-group"><label>العقد</label>
+          <select id="v-contract"><option value="">اختر عقداً</option></select>
+        </div>
+        <div class="form-group"><label>المهندس</label><input type="text" id="v-eng" placeholder="اسم المهندس"></div>
+        <div class="form-group"><label>المرحلة</label>
+          <select id="v-stage"><option>حفر</option><option>قواعد</option><option>هيكل</option><option>تشطيبات</option><option>تسليم</option></select>
+        </div>
+        <div class="form-group"><label>نسبة الإنجاز (%)</label><input type="number" id="v-pct" placeholder="0" min="0" max="100"></div>
+        <div class="form-group"><label>المخالفات المرصودة</label>
+          <select id="v-violation"><option value="">لا توجد</option><option>تجاوز الخط</option><option>مواد رديئة</option><option>عمالة غير مؤهلة</option><option>مخالفة المخططات</option><option>أخرى</option></select>
+        </div>
+        <div class="form-group span2"><label>تقرير الزيارة</label><textarea id="v-report" rows="2" placeholder="ملخص الزيارة..."></textarea></div>
+        <div class="form-group span2"><label>ملاحظات إضافية</label><textarea id="v-notes" rows="2" placeholder="ملاحظات..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('visitModal')">إلغاء</button>
+      <button class="primary" onclick="saveVisit()">💾 حفظ الزيارة</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirmTitle">تأكيد الحذف</div>
+    <div class="confirm-msg" id="confirmMsg">هل أنت متأكد من هذا الإجراء؟ لا يمكن التراجع عنه.</div>
+    <div class="confirm-btns">
+      <button onclick="closeConfirm()">إلغاء</button>
+      <button class="danger" id="confirmOk" onclick="">تأكيد</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="./almuheet-app.js?v=20260212"></script>
+</body>
+</html>

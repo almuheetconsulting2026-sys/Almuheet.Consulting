@@ -1599,8 +1599,9 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
 });
 
 loadSettings();
-initCloud();
-initCloudAuth().then(pullCloudData);
+// initCloud();
+// initCloudAuth().then(pullCloudData);
+setCloudStatus('☁️ محلي', 'var(--text3)');
 
 // تحقق كلمات المرور الافتراضية: ترقية النص إلى hash إذا لزم
 (async () => {

@@ -11,14 +11,14 @@ let contracts   = JSON.parse(localStorage.getItem('contracts')  || '[]');
 let visits      = JSON.parse(localStorage.getItem('visits')     || '[]');
 let auditLogs   = JSON.parse(localStorage.getItem('auditLogs')  || '[]');
 let passwords   = JSON.parse(localStorage.getItem('passwords')  || '{"admin":"","engineer":"","accountant":""}');
-let invoices    = JSON.parse(localStorage.getItem('invoices')   || '[]');
-let files       = JSON.parse(localStorage.getItem('files')      || '[]');
-let drawingVersions = JSON.parse(localStorage.getItem('drawingVersions') || '[]');
 let currentUser        = null;
 let currentRole        = 'admin';
 let editingId          = null;
 let pendingPayments    = [];
 let pendingStages      = [];
+let pendingAttachments = [];
+const MAX_CONTRACT_ATTACH_BYTES = 400 * 1024;
+const MAX_CONTRACT_ATTACHMENTS  = 15;
 let confirmCallback    = null;
 let sessionTimer       = null;
 let sessionDebounce    = null;
@@ -27,7 +27,7 @@ const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 const ROLE_LABELS  = { admin:'مدير النظام', engineer:'مهندس', accountant:'محاسب' };
 const ROLE_CLASSES = { admin:'role-admin', engineer:'role-eng', accountant:'role-acc' };
 const ROLE_AVATARS = { admin:'م', engineer:'م', accountant:'ح' };
-const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','files','drawingVersions'];
+const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords'];
 
 // صلاحيات مفصّلة: تعديل العقود يحتاج صلاحية contracts.edit
 const ROLE_PERMISSIONS = {
@@ -255,8 +255,6 @@ function showPage(id, topBtn, sideBtn) {
   if (id === 'archive')  refreshArchive();
   if (id === 'payments') refreshPayments();
   if (id === 'visits')   refreshVisitsPage();
-  if (id === 'invoices') refreshInvoices();
-  if (id === 'files')    refreshFiles();
   closeNotif();
 }
 
@@ -301,11 +299,6 @@ function buildNotifications() {
   contracts.filter(c => c.status === 'نشط' && c.end && new Date(c.end) < today).forEach(c => {
     const d = Math.round((today - new Date(c.end)) / 86400000);
     items.push({ color:'red', title:`عقد #${esc(c.id)}`, body:`تجاوز الموعد منذ ${d} يوم`, ts:c.end });
-  });
-
-  // فواتير غير مدفوعة
-  invoices.filter(i => i.status !== 'مدفوعة').forEach(inv => {
-    items.push({ color:'blue', title:`فاتورة ${inv.id}`, body:`غير مدفوعة - ${fmt(inv.amount)} ر.ق`, ts:inv.dueDate });
   });
 
   const panel = document.getElementById('notifPanel');
@@ -364,7 +357,7 @@ document.addEventListener('click', e => {
 function contractTab(el, id) {
   el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['ct-basic','ct-project','ct-engineer','ct-payments','ct-license'].forEach(s => {
+  ['ct-basic','ct-project','ct-engineer','ct-payments','ct-license','ct-attachments'].forEach(s => {
     const e2 = document.getElementById(s);
     if (e2) e2.style.display = s === id ? 'block' : 'none';
   });
@@ -376,6 +369,7 @@ function archiveTab(el, id) {
     const e2 = document.getElementById(s);
     if (e2) e2.style.display = s === id ? 'block' : 'none';
   });
+  if (id === 'arch-docs') renderCentralArchive();
 }
 
 // ═══════════════════════════════════════════════
@@ -419,6 +413,7 @@ function openNewContract() {
   document.getElementById('f-start').value = new Date().toISOString().split('T')[0];
   renderPaymentsList();
   renderStages();
+  renderAttachmentsList();
 }
 
 function clearContractForm() {
@@ -434,6 +429,8 @@ function clearContractForm() {
   document.getElementById('f-start').value     = '';
   document.getElementById('f-end').value       = '';
   document.getElementById('f-licExpiry').value = '';
+  pendingAttachments = [];
+  renderAttachmentsList();
 }
 
 function editContract(id) {
@@ -444,8 +441,9 @@ function editContract(id) {
   const c = contracts.find(x => x.id === id);
   if (!c) return;
   editingId       = id;
-  pendingPayments = [...(c.payments || [])];
-  pendingStages   = [...(c.stages   || [])];
+  pendingPayments    = [...(c.payments || [])];
+  pendingStages      = [...(c.stages   || [])];
+  pendingAttachments = (c.attachments || []).map(a => ({ ...a }));
   document.getElementById('contractModalTitle').textContent = '✏️ تعديل العقد #' + id;
   const set = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val || ''; };
   set('f-id',c.id); set('f-owner',c.owner); set('f-phone',c.phone);
@@ -457,6 +455,7 @@ function editContract(id) {
   set('tpl-req',c.tplReq); set('tpl-area',c.tplArea); set('tpl-plot',c.tplPlot); set('tpl-comp',c.tplComp);
   renderPaymentsList();
   renderStages();
+  renderAttachmentsList();
   document.getElementById('contractModal').classList.add('open');
 }
 
@@ -509,6 +508,7 @@ function saveContract() {
     tplComp:   document.getElementById('tpl-comp').value,
     payments:  [...pendingPayments],
     stages:    [...pendingStages],
+    attachments: pendingAttachments.map(a => ({ ...a })),
     createdAt: editingId ? (contracts.find(x => x.id === editingId) || {}).createdAt : new Date().toISOString()
   };
 
@@ -551,6 +551,7 @@ function cloneContract(id) {
   editingId       = null;
   pendingPayments = [];
   pendingStages   = [...(c.stages || [])];
+  pendingAttachments = (c.attachments || []).map(a => ({ ...a }));
   document.getElementById('contractModalTitle').textContent = '📋 نسخ العقد #' + id;
   const set = (fid, val) => { const el = document.getElementById(fid); if (el) el.value = val || ''; };
   set('f-id', nc.id); set('f-owner', nc.owner); set('f-phone', nc.phone);
@@ -561,10 +562,9 @@ function cloneContract(id) {
   set('f-status', nc.status); set('f-type', nc.type); set('f-paymethod', nc.paymethod);
   renderPaymentsList();
   renderStages();
+  renderAttachmentsList();
   document.getElementById('contractModal').classList.add('open');
 }
-
-function reactivateContract(id) {
   if (!hasPermission('contracts.edit')) {
     showToast('⛔ لا تملك صلاحية تعديل العقود', 'warn');
     return;
@@ -906,6 +906,134 @@ function refreshArchive() {
   const regions = [...new Set(contracts.map(c => c.location).filter(Boolean))];
   const archReg = document.getElementById('archRegion');
   if (archReg) archReg.innerHTML = '<option value="">كل المناطق</option>' + regions.map(r => `<option>${esc(r)}</option>`).join('');
+  renderCentralArchive();
+}
+
+function guessAttachmentKind(mime) {
+  const m = (mime || '').toLowerCase();
+  if (m.startsWith('image/')) return 'صور';
+  if (m === 'application/pdf') return 'رخصة';
+  if (m.includes('word') || m.includes('officedocument') || m === 'text/plain') return 'مراسلات';
+  if (m.includes('dwg') || m.includes('dxf') || m.includes('cad')) return 'مخططات';
+  return 'أخرى';
+}
+
+async function handleContractAttachInput(ev) {
+  const input = ev.target;
+  const files   = input && input.files;
+  if (input) input.value = '';
+  if (!files || !files.length) return;
+  for (let i = 0; i < files.length; i++) {
+    if (pendingAttachments.length >= MAX_CONTRACT_ATTACHMENTS) {
+      showToast('⚠️ الحد الأقصى ' + MAX_CONTRACT_ATTACHMENTS + ' مرفقات لكل عقد', 'warn');
+      break;
+    }
+    const file = files[i];
+    if (file.size > MAX_CONTRACT_ATTACH_BYTES) {
+      showToast(`⚠️ "${file.name}" يتجاوز ${MAX_CONTRACT_ATTACH_BYTES / 1024} ك.ب`, 'warn');
+      continue;
+    }
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('read'));
+        fr.readAsDataURL(file);
+      });
+      pendingAttachments.push({
+        id: 'att-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9),
+        name: file.name,
+        mime: file.type || 'application/octet-stream',
+        kind: guessAttachmentKind(file.type),
+        size: file.size,
+        dataUrl,
+        addedAt: new Date().toISOString()
+      });
+    } catch {
+      showToast('⚠️ تعذر قراءة الملف', 'warn');
+    }
+  }
+  renderAttachmentsList();
+}
+
+function renderAttachmentsList() {
+  const el = document.getElementById('attachmentsList');
+  if (!el) return;
+  if (!pendingAttachments.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px 0">لا مرفقات بعد — استخدم «إضافة ملفات» (حتى ' + (MAX_CONTRACT_ATTACH_BYTES / 1024) + ' ك.ب لكل ملف).</div>';
+    return;
+  }
+  el.innerHTML = pendingAttachments.map(a => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border);border-radius:var(--r2);margin-bottom:8px;background:var(--bg2)">
+      <div>
+        <div style="font-weight:600;font-size:12px">${esc(a.name)}</div>
+        <div style="font-size:11px;color:var(--text3)">${esc(a.kind)} — ${Math.round((a.size || 0) / 1024)} ك.ب</div>
+      </div>
+      <button type="button" class="ghost" style="padding:4px 10px;font-size:11px;color:var(--red2)" onclick="removePendingAttachment('${esc(a.id)}')">حذف</button>
+    </div>`).join('');
+}
+
+function removePendingAttachment(attId) {
+  pendingAttachments = pendingAttachments.filter(x => x.id !== attId);
+  renderAttachmentsList();
+}
+
+function renderCentralArchive() {
+  const listEl = document.getElementById('centralDocsList');
+  if (!listEl) return;
+  const searchEl   = document.getElementById('arch-docs-search');
+  const typeEl     = document.getElementById('arch-docs-type');
+  const search       = (searchEl && searchEl.value || '').trim().toLowerCase();
+  const typeFilter   = typeEl && typeEl.value || '';
+  let rows = [];
+  contracts.forEach(c => {
+    (c.attachments || []).forEach(att => {
+      rows.push({
+        contractId: c.id,
+        owner:      c.owner || '',
+        name:       att.name || 'ملف',
+        kind:       att.kind || 'أخرى',
+        size:       att.size || 0,
+        addedAt:    att.addedAt || '',
+        dataUrl:    att.dataUrl || ''
+      });
+    });
+  });
+  if (typeFilter) rows = rows.filter(r => r.kind === typeFilter);
+  if (search) {
+    rows = rows.filter(r =>
+      (String(r.name) + ' ' + String(r.contractId) + ' ' + String(r.owner)).toLowerCase().includes(search)
+    );
+  }
+  if (!rows.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px">لا توجد مرفقات مسجّلة. أضف ملفات من نموذج العقد → تبويب «المرفقات».</div>';
+    return;
+  }
+  const safeDownloadName = (name) => String(name || 'file').replace(/[^\w\u0600-\u06FF.\-]+/g, '_').slice(0, 120);
+  listEl.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>العقد</th><th>المالك</th><th>اسم الملف</th><th>النوع</th><th>الحجم</th><th>التاريخ</th><th></th>
+      </tr></thead>
+      <tbody>
+      ${rows.map(r => {
+    const href = r.dataUrl ? String(r.dataUrl).replace(/"/g, '%22') : '';
+    const dn   = safeDownloadName(r.name);
+    const dl   = r.dataUrl
+      ? `<a class="ghost" style="padding:4px 8px;font-size:11px;display:inline-block" href="${href}" download="${esc(dn)}" target="_blank" rel="noopener noreferrer">⬇️ تنزيل</a>`
+      : '—';
+    return `<tr>
+        <td class="td-mono">#${esc(r.contractId)}</td>
+        <td>${esc(r.owner)}</td>
+        <td>${esc(r.name)}</td>
+        <td><span class="tag info">${esc(r.kind)}</span></td>
+        <td class="td-mono">${Math.round((r.size || 0) / 1024)} ك.ب</td>
+        <td style="font-size:12px">${r.addedAt ? esc(new Date(r.addedAt).toLocaleDateString('ar-QA')) : '—'}</td>
+        <td>${dl}</td>
+      </tr>`;
+  }).join('')}
+      </tbody>
+    </table>`;
 }
 
 // تجديد رخصة — Modal بدلاً من prompt()
@@ -1116,8 +1244,6 @@ function refreshAll() {
   // عداد الشريط الجانبي
   document.getElementById('sc-contracts').textContent = contracts.filter(c => c.status === 'نشط').length;
   document.getElementById('sc-visits').textContent    = visits.filter(v => v.date === today.toISOString().split('T')[0]).length;
-  document.getElementById('sc-invoices').textContent  = invoices.filter(i => i.status !== 'مدفوعة').length;
-  document.getElementById('sc-files').textContent     = files.length;
 
   // فلتر المهندسين
   const engs  = [...new Set(contracts.map(c => c.engName).filter(Boolean))];
@@ -1397,15 +1523,22 @@ async function initCloudAuth() {
   }
 }
 
-async function fetchCloudUserByRolePassword(role, password) {
+async function fetchCloudUserByRolePassword(role, passwordRaw) {
   if (!cloudDb || !cloudAuthReady) return null;
   try {
-    const snap = await cloudDb.collection('users')
-      .where('role', '==', role)
-      .where('password', '==', password)
-      .limit(1).get();
-    if (snap.empty) return null;
-    return snap.docs[0].data();
+    const doc = await cloudDb.collection('users').doc(role).get();
+    if (!doc.exists) return null;
+    const data = doc.data() || {};
+    const stored = data.password;
+    const passHash = await sha256(passwordRaw);
+    const looksLikeHexHash = typeof stored === 'string' && stored.length === 64 && /^[0-9a-f]+$/i.test(stored);
+    if (looksLikeHexHash && passHash === stored) return data;
+    // ترقية من حقول قديمة نصية في Firestore
+    if (typeof stored === 'string' && stored && !looksLikeHexHash && stored === passwordRaw) {
+      await upsertCloudRoleUser(role, passHash);
+      return { ...data, password: passHash };
+    }
+    return null;
   } catch { return null; }
 }
 
@@ -1494,9 +1627,6 @@ function saveData(syncCloud = true) {
   localStorage.setItem('visits',     JSON.stringify(visits));
   localStorage.setItem('auditLogs',  JSON.stringify(auditLogs));
   localStorage.setItem('passwords',  JSON.stringify(passwords));
-  localStorage.setItem('invoices',   JSON.stringify(invoices));
-  localStorage.setItem('files',      JSON.stringify(files));
-  localStorage.setItem('drawingVersions', JSON.stringify(drawingVersions));
   if (syncCloud) queueCloudSave();
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -1513,7 +1643,7 @@ function closeConfirm() { document.getElementById('confirmOverlay').classList.re
 function exportData() {
   const payload = {
     meta: { app:'almuheet-contract-system', version:'2.0.0', exportedAt: new Date().toISOString() },
-    contracts, visits, auditLogs, passwords, invoices, files, drawingVersions
+    contracts, visits, auditLogs, passwords
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json;charset=utf-8' });
   const a    = document.createElement('a');
@@ -1524,310 +1654,6 @@ function exportData() {
   URL.revokeObjectURL(a.href);
   addAudit('export', 'تصدير نسخة احتياطية كاملة');
   showToast('✅ تم تصدير النسخة الاحتياطية');
-}
-
-// ═══════════════════════════════════════════════
-// INVOICE SYSTEM
-// ═══════════════════════════════════════════════
-function createInvoice(contractId) {
-  const contract = contracts.find(c => c.id === contractId);
-  if (!contract) { showToast('⚠️ العقد غير موجود', 'warn'); return; }
-  
-  const invoice = {
-    id: 'INV-' + new Date().getFullYear() + '-' + String(invoices.length + 1).padStart(4, '0'),
-    contractId,
-    client: contract.owner,
-    amount: contract.value - (contract.payments || []).reduce((s, p) => s + p.amount, 0),
-    status: 'غير مدفوعة',
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    createdAt: new Date().toISOString()
-  };
-  
-  invoices.push(invoice);
-  saveData();
-  addAudit('create', `إنشاء فاتورة ${invoice.id} للعقد #${contractId}`);
-  showToast('✅ تم إنشاء الفاتورة');
-  refreshInvoices();
-}
-
-function generateInvoicePDF(invoiceId) {
-  const invoice = invoices.find(i => i.id === invoiceId);
-  if (!invoice) { showToast('⚠️ الفاتورة غير موجودة', 'warn'); return; }
-  
-  const contract = contracts.find(c => c.id === invoice.contractId);
-  
-  // Create simple HTML for PDF
-  const htmlContent = `
-<!DOCTYPE html>
-<html dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>فاتورة ${invoice.id}</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 40px; direction: rtl; }
-    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-    .title { font-size: 24px; font-weight: bold; }
-    .info { margin: 20px 0; }
-    .info-row { display: flex; justify-content: space-between; margin: 10px 0; }
-    .total { font-size: 20px; font-weight: bold; margin-top: 30px; text-align: center; }
-    .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #666; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="title">المحيط للاستشارات الهندسية</div>
-    <div>AL MUHEET ENGINEERING CONSULTING</div>
-  </div>
-  
-  <div class="info">
-    <div class="info-row"><span>رقم الفاتورة:</span><span>${invoice.id}</span></div>
-    <div class="info-row"><span>التاريخ:</span><span>${new Date(invoice.createdAt).toLocaleDateString('ar-QA')}</span></div>
-    <div class="info-row"><span>العميل:</span><span>${invoice.client}</span></div>
-    <div class="info-row"><span>رقم العقد:</span><span>${invoice.contractId}</span></div>
-  </div>
-  
-  <div class="total">
-    المبلغ: ${fmt(invoice.amount)} ر.ق
-  </div>
-  
-  <div class="footer">
-    رخصة 164638 | 30503076 - 40296739
-  </div>
-</body>
-</html>`;
-  
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${invoice.id}.html`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(a.href);
-  
-  addAudit('export', `تصدير PDF للفاتورة ${invoice.id}`);
-  showToast('✅ تم تصدير الفاتورة');
-}
-
-function markInvoiceAsPaid(invoiceId) {
-  const invoice = invoices.find(i => i.id === invoiceId);
-  if (!invoice) return;
-  
-  invoice.status = 'مدفوعة';
-  invoice.paidAt = new Date().toISOString();
-  
-  // Add payment to contract
-  const contract = contracts.find(c => c.id === invoice.contractId);
-  if (contract) {
-    if (!contract.payments) contract.payments = [];
-    contract.payments.push({
-      amount: invoice.amount,
-      date: new Date().toISOString().split('T')[0],
-      type: 'فاتورة',
-      ref: invoice.id
-    });
-  }
-  
-  saveData();
-  addAudit('edit', `تحديث حالة الفاتورة ${invoiceId} إلى مدفوعة`);
-  showToast('✅ تم تحديث حالة الفاتورة');
-  refreshInvoices();
-  refreshAll();
-}
-
-function refreshInvoices() {
-  const tb = document.getElementById('invoicesTable');
-  if (!tb) return;
-
-  if (!invoices.length) {
-    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">لا توجد فواتير</td></tr>';
-    return;
-  }
-
-  tb.innerHTML = invoices.map(inv => {
-    const statusClass = inv.status === 'مدفوعة' ? 'success' : 'warn';
-    return `<tr>
-      <td class="td-mono">${inv.id}</td>
-      <td>${esc(inv.client)}</td>
-      <td class="td-mono">${fmt(inv.amount)} ر.ق</td>
-      <td><span class="tag ${statusClass}">${inv.status}</span></td>
-      <td>
-        <div style="display:flex;gap:4px">
-          <button class="ghost" onclick="generateInvoicePDF('${inv.id}')" style="padding:4px 6px;font-size:11px">📄 PDF</button>
-          ${inv.status !== 'مدفوعة' ? `<button class="ghost" onclick="markInvoiceAsPaid('${inv.id}')" style="padding:4px 6px;font-size:11px;color:var(--accent2)">✓ دفع</button>` : ''}
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function showInvoiceModal() {
-  const modal = document.getElementById('invoiceModal');
-  if (!modal) {
-    showToast('⚠️ Modal غير موجود', 'warn');
-    return;
-  }
-  
-  // Populate contract dropdown
-  const select = document.getElementById('inv-contract');
-  select.innerHTML = '<option value="">اختر عقداً</option>' +
-    contracts.filter(c => c.status === 'نشط').map(c => `<option value="${c.id}">${esc(c.id)} - ${esc(c.owner)}</option>`).join('');
-  
-  modal.classList.add('open');
-}
-
-function handleCreateInvoice() {
-  const contractId = document.getElementById('inv-contract').value.trim();
-  if (!contractId) {
-    showToast('⚠️ اختر العقد', 'warn');
-    return;
-  }
-  createInvoice(contractId);
-  closeModal('invoiceModal');
-}
-
-// ═══════════════════════════════════════════════
-// FILE MANAGEMENT SYSTEM
-// ═══════════════════════════════════════════════
-function uploadFile(file, contractId = null, type = 'general') {
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const fileData = {
-      id: 'FILE-' + Date.now(),
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      sizeFormatted: formatFileSize(file.size),
-      data: e.target.result, // Base64 for demo - in production use cloud storage
-      contractId,
-      fileType: type, // 'drawing', 'photo_before', 'photo_after', 'general'
-      uploadedAt: new Date().toISOString()
-    };
-
-    files.push(fileData);
-    saveData();
-    addAudit('create', `رفع الملف ${file.name}`);
-    showToast('✅ تم رفع الملف');
-    refreshFiles();
-  };
-  reader.readAsDataURL(file);
-}
-
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
-
-function refreshFiles() {
-  const tb = document.getElementById('filesTable');
-  if (!tb) return;
-
-  if (!files.length) {
-    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">لا توجد ملفات</td></tr>';
-    return;
-  }
-
-  tb.innerHTML = files.map(f => {
-    const typeIcon = f.fileType === 'drawing' ? '📐' : f.fileType === 'photo_before' ? '📷' : f.fileType === 'photo_after' ? '📸' : '📄';
-    return `<tr>
-      <td>${typeIcon} ${esc(f.name)}</td>
-      <td>${esc(f.type || 'غير معروف')}</td>
-      <td class="td-mono">${f.sizeFormatted}</td>
-      <td class="td-mono">${new Date(f.uploadedAt).toLocaleDateString('ar-QA')}</td>
-      <td>
-        <div style="display:flex;gap:4px">
-          <button class="ghost" onclick="viewFile('${f.id}')" style="padding:4px 6px;font-size:11px">👁️ عرض</button>
-          <button class="ghost" onclick="deleteFile('${f.id}')" style="padding:4px 6px;font-size:11px;color:var(--red2)">🗑️ حذف</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function viewFile(fileId) {
-  const file = files.find(f => f.id === fileId);
-  if (!file) return;
-
-  if (file.type && file.type.startsWith('image/')) {
-    // Open image in new tab
-    const win = window.open();
-    win.document.write(`<img src="${file.data}" style="max-width:100%;height:auto">`);
-  } else if (file.type === 'application/pdf') {
-    // Open PDF in new tab
-    const win = window.open();
-    win.document.write(`<iframe src="${file.data}" style="width:100%;height:100vh;border:none"></iframe>`);
-  } else {
-    showToast('⚠️ نوع الملف غير مدعوم للمعاينة', 'warn');
-  }
-}
-
-function deleteFile(fileId) {
-  showConfirm('حذف الملف', 'هل أنت متأكد من حذف هذا الملف؟', () => {
-    const index = files.findIndex(f => f.id === fileId);
-    if (index > -1) {
-      const file = files[index];
-      files.splice(index, 1);
-      saveData();
-      addAudit('delete', `حذف الملف ${file.name}`);
-      showToast('✅ تم حذف الملف');
-      refreshFiles();
-    }
-  });
-}
-
-function showUploadModal() {
-  const modal = document.getElementById('uploadModal');
-  if (!modal) {
-    showToast('⚠️ Modal غير موجود', 'warn');
-    return;
-  }
-  
-  // Populate contract dropdown
-  const select = document.getElementById('upload-contract');
-  select.innerHTML = '<option value="">بدون ربط بعقد</option>' +
-    contracts.map(c => `<option value="${c.id}">${esc(c.id)} - ${esc(c.owner)}</option>`).join('');
-  
-  modal.classList.add('open');
-}
-
-function handleFileUpload(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
-
-  const contractId = document.getElementById('upload-contract')?.value || null;
-  const fileType = document.getElementById('upload-type')?.value || 'general';
-
-  uploadFile(file, contractId, fileType);
-  closeModal('uploadModal');
-  event.target.value = '';
-}
-
-// ═══════════════════════════════════════════════
-// DRAWING VERSION TRACKING
-// ═══════════════════════════════════════════════
-function addDrawingVersion(contractId, version, fileId, status = 'قيد المراجعة') {
-  const versionData = {
-    id: 'VER-' + Date.now(),
-    contractId,
-    version,
-    fileId,
-    status,
-    createdAt: new Date().toISOString()
-  };
-
-  drawingVersions.push(versionData);
-  saveData();
-  addAudit('create', `إضافة نسخة مخطط ${version} للعقد #${contractId}`);
-  showToast('✅ تم إضافة النسخة');
-}
-
-function getDrawingVersions(contractId) {
-  return drawingVersions.filter(v => v.contractId === contractId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 function importData() {
@@ -1918,9 +1744,8 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
 });
 
 loadSettings();
-// initCloud();
-// initCloudAuth().then(pullCloudData);
-setCloudStatus('☁️ محلي', 'var(--text3)');
+initCloud();
+initCloudAuth().then(pullCloudData);
 
 // تحقق كلمات المرور الافتراضية: ترقية النص إلى hash إذا لزم
 (async () => {

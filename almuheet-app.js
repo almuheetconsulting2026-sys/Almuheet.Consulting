@@ -1432,16 +1432,24 @@ function initCloud() {
 }
 
 async function initCloudAuth() {
-  if (!cloudReady || !firebase.auth) return;
+  if (!cloudReady || !firebase.auth) {
+    console.error('Firebase not ready or auth not available');
+    setCloudStatus('☁️ غير متاح', 'var(--text3)');
+    return;
+  }
   try {
     const auth = firebase.auth();
-    if (!auth.currentUser) await auth.signInAnonymously();
+    if (!auth.currentUser) {
+      await auth.signInAnonymously();
+    }
     cloudAuthReady = true;
     setCloudStatus('☁️ مصادق', 'var(--accent2)');
     syncCloudRolePasswords();
   } catch (err) {
     cloudAuthReady = false;
-    setCloudStatus('☁️ فشل التوثيق', 'var(--red2)');
+    console.error('Firebase auth error:', err);
+    setCloudStatus('☁️ فشل التوثيق - محلي', 'var(--amber2)');
+    // الاستمرار بالعمل محلياً إذا فشلت المصادقة
   }
 }
 

@@ -38,13 +38,13 @@ const ROLE_PERMISSIONS = {
 
 // إعدادات Firebase — يُنصح بنقلها لملف .env في بيئة الإنتاج
 const firebaseConfig = {
-  apiKey:            "AIzaSyABwSGl5_rgqTK1jVtSZMuRCZz4p1I0PLU",
-  authDomain:        "almuheet-contract-system.firebaseapp.com",
-  projectId:         "almuheet-contract-system",
-  storageBucket:     "almuheet-contract-system.firebasestorage.app",
-  messagingSenderId: "365422189394",
-  appId:             "1:365422189394:web:9f01ce64948d300ca4b88b",
-  measurementId:     "G-NPLBC6QN12"
+  apiKey:            "AIzaSyAHTqDMdY5BtElQl53dmR747QFORwcBp1w",
+  authDomain:        "almuheetconsulting-923e5.firebaseapp.com",
+  projectId:         "almuheetconsulting-923e5",
+  storageBucket:     "almuheetconsulting-923e5.firebasestorage.app",
+  messagingSenderId: "509847829259",
+  appId:             "1:509847829259:web:4a5be4256b34d154ec800e",
+  measurementId:     "G-E2XB531Y1E"
 };
 
 const CLOUD_DOC_PATH = { collection:'systems', doc:'main' };
@@ -146,24 +146,30 @@ async function doLogin() {
     currentUser        = loginName;
     currentPermissions = loginPermissions;
 
-    document.getElementById('userName').textContent  = currentUser;
-    document.getElementById('userRole').textContent  =
-      currentRole === 'admin' ? 'Admin' : currentRole === 'engineer' ? 'Engineer' : 'Accountant';
-    document.getElementById('userRole').className    = 'role-badge ' + ROLE_CLASSES[currentRole];
-    document.getElementById('userAvatar').textContent = ROLE_AVATARS[currentRole];
+    const userNameEl = document.getElementById('userName');
+    const userRoleEl = document.getElementById('userRole');
+    const userAvatarEl = document.getElementById('userAvatar');
+    const loginScreenEl = document.getElementById('loginScreen');
+    const appEl = document.getElementById('app');
 
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display          = 'flex';
+    if (userNameEl) userNameEl.textContent = currentUser;
+    if (userRoleEl) {
+      userRoleEl.textContent = currentRole === 'admin' ? 'Admin' : currentRole === 'engineer' ? 'Engineer' : 'Accountant';
+      userRoleEl.className = 'role-badge ' + ROLE_CLASSES[currentRole];
+    }
+    if (userAvatarEl) userAvatarEl.textContent = ROLE_AVATARS[currentRole];
+    if (loginScreenEl) loginScreenEl.style.display = 'none';
+    if (appEl) appEl.style.display = 'flex';
 
     addAudit('login', `${currentUser} سجّل دخوله`);
     refreshAll();
     buildNotifications();
     startSessionTimer();
 
-    document.getElementById('dashDate').textContent =
-      new Date().toLocaleDateString('ar-QA',{ weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    document.getElementById('auditNow').textContent =
-      new Date().toLocaleTimeString('ar-QA');
+    const dashDateEl = document.getElementById('dashDate');
+    const auditNowEl = document.getElementById('auditNow');
+    if (dashDateEl) dashDateEl.textContent = new Date().toLocaleDateString('ar-QA',{ weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    if (auditNowEl) auditNowEl.textContent = new Date().toLocaleTimeString('ar-QA');
 
     // إخفاء الصفحات المقيّدة للأدوار غير المدير
     if (currentRole !== 'admin') {
@@ -906,9 +912,50 @@ function refreshArchive() {
   const regions = [...new Set(contracts.map(c => c.location).filter(Boolean))];
   const archReg = document.getElementById('archRegion');
   if (archReg) archReg.innerHTML = '<option value="">كل المناطق</option>' + regions.map(r => `<option>${esc(r)}</option>`).join('');
+  renderCentralArchive();
 }
 
-// تجديد رخصة — Modal بدلاً من prompt()
+function renderCentralArchive() {
+  const filter = (document.getElementById('arch-docs-search')?.value || '').toLowerCase().trim();
+  const type   = (document.getElementById('arch-docs-type')?.value || '');
+  const listEl = document.getElementById('centralDocsList');
+  if (!listEl) return;
+
+  const typeMap = {
+    'رخصة': ['general'],
+    'مخططات': ['drawing'],
+    'صور': ['photo_before','photo_after'],
+    'مراسلات': ['general'],
+    'أخرى': ['general']
+  };
+  const docs = files.filter(f => {
+    const title = (f.name || '').toLowerCase();
+    if (type && type !== 'كل الأنواع') {
+      const allowed = typeMap[type] || [type];
+      if (!allowed.includes(f.fileType)) return false;
+    }
+    if (filter && !title.includes(filter) && !((f.contractId || '').toLowerCase().includes(filter))) return false;
+    return true;
+  });
+
+  if (!docs.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:var(--text3);padding:40px;font-size:13px">لا توجد مستندات تطابق البحث</div>';
+    return;
+  }
+
+  listEl.innerHTML = docs.map(doc => `
+    <div class="card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600">${esc(doc.name)}</div>
+        <div style="font-size:12px;color:var(--text3)">العقد: ${esc(doc.contractId || 'عام')} — ${esc(doc.fileType || 'عام')}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="ghost" onclick="viewFile('${esc(doc.id)}')">عرض</button>
+        <button class="ghost" onclick="deleteFile('${esc(doc.id)}')" style="color:var(--red2)">حذف</button>
+      </div>
+    </div>`).join('');
+}
+
 function openRenewLicenseModal(id) {
   const c = contracts.find(x => x.id === id);
   if (!c) return;
@@ -916,6 +963,7 @@ function openRenewLicenseModal(id) {
   document.getElementById('rl-date').value       = c.licExpiry || '';
   document.getElementById('renewLicModal').classList.add('open');
 }
+
 function saveRenewLicense() {
   const id      = document.getElementById('rl-contractId').value;
   const newDate = document.getElementById('rl-date').value;

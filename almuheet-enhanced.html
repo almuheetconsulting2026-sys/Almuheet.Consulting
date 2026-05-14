@@ -19,10 +19,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./almuheet-app.css">
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 
@@ -255,7 +251,7 @@
               <option value="عظم">عظم</option>
               <option value="تشطيب">تشطيب</option>
             </select>
-            <select onchange="filterContracts()" id="fEng" style="width:auto" id="fEng">
+            <select onchange="filterContracts()" id="fEng" style="width:auto">
               <option value="">كل المهندسين</option>
             </select>
           </div>
@@ -453,13 +449,13 @@
           <div class="table-toolbar" style="background:var(--bg2);border-radius:var(--r2);margin-bottom:12px;border:1px solid var(--border)">
             <div class="search-box" style="flex:1">
               <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" placeholder="بحث في المستندات...">
+              <input type="text" id="arch-docs-search" placeholder="بحث في المستندات..." oninput="renderCentralArchive()">
             </div>
-            <select style="width:auto">
+            <select id="arch-docs-type" style="width:auto" onchange="renderCentralArchive()">
               <option>كل الأنواع</option><option>رخصة</option><option>مخططات</option><option>صور</option><option>مراسلات</option>
             </select>
           </div>
-          <div style="text-align:center;color:var(--text3);padding:40px;font-size:13px">📁 المستندات المركزية ستظهر هنا عند إضافة عقود تحتوي على مرفقات</div>
+          <div id="centralDocsList" style="text-align:center;color:var(--text3);padding:40px;font-size:13px">📁 المستندات المركزية ستظهر هنا عند إضافة عقود تحتوي على مرفقات</div>
         </div>
       </div>
 
@@ -598,10 +594,10 @@
           <div class="card">
             <div class="card-title" style="margin-bottom:14px">معلومات المكتب</div>
             <div style="display:flex;flex-direction:column;gap:10px">
-              <div class="form-group"><label>اسم المكتب (عربي)</label><input type="text" value="المحيط للاستشارات الهندسية"></div>
-              <div class="form-group"><label>اسم المكتب (إنجليزي)</label><input type="text" value="AL MUHEET ENGINEERING CONSULTING"></div>
-              <div class="form-group"><label>رقم الرخصة</label><input type="text" value="164638"></div>
-              <div class="form-group"><label>أرقام التواصل</label><input type="text" value="30503076 - 40296739"></div>
+              <div class="form-group"><label>اسم المكتب (عربي)</label><input type="text" id="set-nameAr" value="المحيط للاستشارات الهندسية"></div>
+              <div class="form-group"><label>اسم المكتب (إنجليزي)</label><input type="text" id="set-nameEn" value="AL MUHEET ENGINEERING CONSULTING"></div>
+              <div class="form-group"><label>رقم الرخصة</label><input type="text" id="set-licNo" value="164638"></div>
+              <div class="form-group"><label>أرقام التواصل</label><input type="text" id="set-phones" value="30503076 - 40296739"></div>
               <button class="primary" onclick="saveSettings()">💾 حفظ</button>
             </div>
           </div>
@@ -807,12 +803,30 @@
         </select>
       </div>
       <div class="form-group"><label>الملف</label>
-        <input type="file" id="uploadFile" accept=".pdf,.dwg,.jpg,.jpeg,.png">
+        <input type="file" id="uploadFile" accept=".pdf,.dwg,.jpg,.jpeg,.png" onchange="handleFileUpload(event)">
       </div>
     </div>
     <div class="modal-footer">
       <button onclick="closeModal('uploadModal')">إلغاء</button>
-      <button class="primary" onclick="handleFileUpload(event)">📤 رفع الملف</button>
+      <button class="primary" onclick="document.getElementById('uploadFile').click()">📤 رفع الملف</button>
+    </div>
+  </div>
+</div>
+
+<!-- RENEW LICENSE MODAL -->
+<div class="modal-overlay" id="renewLicModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-header">
+      <div class="modal-title">🔄 تجديد رخصة البناء</div>
+      <button class="ghost" onclick="closeModal('renewLicModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rl-contractId">
+      <div class="form-group"><label>تاريخ انتهاء الرخصة الجديد</label><input type="date" id="rl-date"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="closeModal('renewLicModal')">إلغاء</button>
+      <button class="primary" onclick="saveRenewLicense()">💾 حفظ</button>
     </div>
   </div>
 </div>

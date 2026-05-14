@@ -1966,9 +1966,8 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
 });
 
 loadSettings();
-// initCloud();
-// initCloudAuth().then(pullCloudData);
-setCloudStatus('☁️ محلي', 'var(--text3)');
+initCloud();
+initCloudAuth().then(pullCloudData);
 
 // تحقق كلمات المرور الافتراضية: ترقية النص إلى hash إذا لزم
 (async () => {

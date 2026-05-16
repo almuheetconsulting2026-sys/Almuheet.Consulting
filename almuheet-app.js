@@ -1571,36 +1571,58 @@ async function initializeCloudData(force = false) {
 }
 
 async function pullCloudData() {
-  if (!cloudReady || !cloudDb || !cloudAuthReady) return;
+  // تحميل أولي من localStorage لضمان استجابة التطبيق
+  STORAGE_KEYS.forEach(k => {
+    const local = localStorage.getItem(k);
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (k === 'contracts') contracts = parsed;
+        if (k === 'visits') visits = parsed;
+        if (k === 'auditLogs') auditLogs = parsed;
+        if (k === 'passwords') passwords = parsed;
+        if (k === 'invoices') invoices = parsed;
+        if (k === 'files') files = parsed;
+        if (k === 'drawingVersions') drawingVersions = parsed;
+      } catch (e) {}
+    }
+  });
+  refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
+
+  if (!cloudReady || !cloudDb || !cloudAuthReady) {
+    cloudPullDone = true;
+    return;
+  }
+
   try {
     const snap = await cloudDb.collection(CLOUD_DOC_PATH.collection).doc(CLOUD_DOC_PATH.doc).get();
     if (!snap.exists) {
-      // المستند غير موجود - هذا طبيعي في المرة الأولى
       cloudPullDone = true;
       setCloudStatus('☁️ جاهز للحفظ', 'var(--accent2)');
       return;
     }
     const data = snap.data() || {};
-    if (Array.isArray(data.contracts))              contracts  = data.contracts;
-    if (Array.isArray(data.visits))                 visits     = data.visits;
-    if (Array.isArray(data.auditLogs))              auditLogs  = data.auditLogs;
+    if (Array.isArray(data.contracts))       contracts  = data.contracts;
+    if (Array.isArray(data.visits))          visits     = data.visits;
+    if (Array.isArray(data.auditLogs))       auditLogs  = data.auditLogs;
+    if (Array.isArray(data.invoices))        invoices   = data.invoices;
+    if (Array.isArray(data.files))           files      = data.files;
+    if (Array.isArray(data.drawingVersions)) drawingVersions = data.drawingVersions;
     if (data.passwords && typeof data.passwords === 'object') passwords = data.passwords;
-    saveData(false);
+    
+    saveData(false); // تحديث التخزين المحلي بالبيانات السحابية
     refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
     buildNotifications();
     cloudPullDone = true;
     setCloudStatus('☁️ مزامنة مفعلة', 'var(--accent2)');
   } catch (err) {
     console.error('Firestore pull error:', err);
-    // إذا كان الخطأ بسبب عدم وجود المستند، فهذا طبيعي
     if (err.code === 'permission-denied') {
       setCloudStatus('☁️ خطأ صلاحيات Firestore', 'var(--red2)');
-    } else if (err.code === 'failed-precondition' || err.message.includes('offline')) {
-      setCloudStatus('☁️ غير متصل بالإنترنت', 'var(--amber2)');
     } else {
-      setCloudStatus('☁️ فشل السحب - محلي', 'var(--amber2)');
+      setCloudStatus('☁️ فشل المزامنة السحابية', 'var(--amber2)');
     }
-    cloudPullDone = true; // الاستمرار بالعمل محلياً
+    cloudPullDone = true;
   }
 }
 
@@ -1613,19 +1635,19 @@ function queueCloudSave() {
 async function pushCloudData() {
   if (!cloudReady || !cloudDb || !cloudAuthReady) return;
   try {
-    // ⚠️ كلمات المرور محفوظة كـ hash SHA-256 فقط
+    // حفظ جميع البيانات في السحابة
     await cloudDb.collection(CLOUD_DOC_PATH.collection).doc(CLOUD_DOC_PATH.doc).set({
       contracts, visits, auditLogs, passwords,
+      invoices, files, drawingVersions,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     setCloudStatus('☁️ تم الحفظ', 'var(--accent2)');
-    // clear any pending timer
     if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
-  } catch {
+  } catch (err) {
+    console.error('Push error:', err);
     setCloudStatus('☁️ فشل الحفظ — سيتم إعادة المحاولة', 'var(--amber2)');
-    // إعادة المحاولة بعد تأخير أقصر
     if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = setTimeout(pushCloudData, 2000);
+    cloudSaveTimer = setTimeout(pushCloudData, 3000);
   }
 }
 
@@ -1646,15 +1668,26 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - new Date()) / 86400000);
 }
 function saveData(syncCloud = true) {
-  // In cloud-only mode we push directly to Firestore. If cloud is not ready, abort and notify.
-  if (!cloudReady || !cloudAuthReady) {
-    console.warn('Cloud not ready — cannot save.');
-    setCloudStatus('☁️ السحابة غير جاهزة للحفظ', 'var(--red2)');
-    showToast('⚠️ السحابة غير جاهزة — تعذّر الحفظ');
-    return;
-  }
+  // حفظ محلي احتياطي
+  STORAGE_KEYS.forEach(k => {
+    let val = null;
+    if (k === 'contracts') val = contracts;
+    if (k === 'visits') val = visits;
+    if (k === 'auditLogs') val = auditLogs;
+    if (k === 'passwords') val = passwords;
+    if (k === 'invoices') val = invoices;
+    if (k === 'files') val = files;
+    if (k === 'drawingVersions') val = drawingVersions;
+    if (val) localStorage.setItem(k, JSON.stringify(val));
+  });
+
   if (syncCloud) {
-    pushCloudData();
+    if (!cloudReady || !cloudAuthReady) {
+      console.warn('Cloud not ready — save queued or local only.');
+      setCloudStatus('☁️ جاري انتظار السحابة...', 'var(--amber2)');
+      return;
+    }
+    queueCloudSave();
   }
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -1847,30 +1880,46 @@ function handleCreateInvoice() {
 // ═══════════════════════════════════════════════
 // FILE MANAGEMENT SYSTEM
 // ═══════════════════════════════════════════════
-function uploadFile(file, contractId = null, type = 'general') {
+async function uploadFile(file, contractId = null, type = 'general') {
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
+  // التحقق من جاهزية السحابة
+  if (!cloudReady || !firebase.storage) {
+    showToast('⚠️ السحابة غير جاهزة لرفع الملفات', 'warn');
+    return;
+  }
+
+  const fileId = 'FILE-' + Date.now();
+  const storageRef = firebase.storage().ref();
+  const fileRef = storageRef.child(`uploads/${contractId || 'general'}/${fileId}_${file.name}`);
+
+  showToast('⏳ جاري رفع الملف...', 'info');
+
+  try {
+    const snapshot = await fileRef.put(file);
+    const downloadURL = await snapshot.ref.getDownloadURL();
+
     const fileData = {
-      id: 'FILE-' + Date.now(),
+      id: fileId,
       name: file.name,
       type: file.type,
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
-      data: e.target.result, // Base64 for demo - in production use cloud storage
+      data: downloadURL, // استخدام رابط التخزين السحابي بدلاً من Base64
       contractId,
-      fileType: type, // 'drawing', 'photo_before', 'photo_after', 'general'
+      fileType: type,
       uploadedAt: new Date().toISOString()
     };
 
     files.push(fileData);
     saveData();
     addAudit('create', `رفع الملف ${file.name}`);
-    showToast('✅ تم رفع الملف');
+    showToast('✅ تم رفع الملف بنجاح');
     refreshFiles();
-  };
-  reader.readAsDataURL(file);
+  } catch (error) {
+    console.error('Upload error:', error);
+    showToast('❌ فشل رفع الملف', 'warn');
+  }
 }
 
 function formatFileSize(bytes) {
@@ -1911,16 +1960,10 @@ function viewFile(fileId) {
   const file = files.find(f => f.id === fileId);
   if (!file) return;
 
-  if (file.type && file.type.startsWith('image/')) {
-    // Open image in new tab
-    const win = window.open();
-    win.document.write(`<img src="${file.data}" style="max-width:100%;height:auto">`);
-  } else if (file.type === 'application/pdf') {
-    // Open PDF in new tab
-    const win = window.open();
-    win.document.write(`<iframe src="${file.data}" style="width:100%;height:100vh;border:none"></iframe>`);
+  if (file.data && (file.data.startsWith('http') || file.data.startsWith('data:'))) {
+    window.open(file.data, '_blank');
   } else {
-    showToast('⚠️ نوع الملف غير مدعوم للمعاينة', 'warn');
+    showToast('⚠️ رابط الملف غير صالح', 'warn');
   }
 }
 

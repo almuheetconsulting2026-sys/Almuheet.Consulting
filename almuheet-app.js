@@ -1421,6 +1421,10 @@ function initCloud() {
       setCloudStatus('☁️ غير متصل');
       return;
     }
+    if (!navigator.onLine) {
+      setCloudStatus('☁️ غير متصل بالإنترنت', 'var(--amber2)');
+      return;
+    }
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     cloudDb    = firebase.firestore();
     cloudReady = true;
@@ -1514,6 +1518,8 @@ async function pullCloudData() {
     // إذا كان الخطأ بسبب عدم وجود المستند، فهذا طبيعي
     if (err.code === 'permission-denied') {
       setCloudStatus('☁️ خطأ صلاحيات Firestore', 'var(--red2)');
+    } else if (err.code === 'failed-precondition' || err.message.includes('offline')) {
+      setCloudStatus('☁️ غير متصل بالإنترنت', 'var(--amber2)');
     } else {
       setCloudStatus('☁️ فشل السحب - محلي', 'var(--amber2)');
     }

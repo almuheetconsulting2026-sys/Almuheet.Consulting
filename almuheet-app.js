@@ -53,6 +53,7 @@ let cloudReady     = false;
 let cloudSaveTimer = null;
 let cloudPullDone  = false;
 let cloudAuthReady = false;
+let cloudForceEnable = localStorage.getItem('cloudForceEnable') === '1';
 let currentPermissions = [];
 
 // ═══════════════════════════════════════════════
@@ -1415,7 +1416,7 @@ function setCloudStatus(text, colorVar = 'var(--text3)') {
   el.style.color  = colorVar;
 }
 
-function initCloud() {
+async function initCloud() {
   try {
     if (!window.firebase || !window.firebase.initializeApp) {
       setCloudStatus('☁️ غير متصل');
@@ -1438,12 +1439,15 @@ function initCloud() {
         return false;
       }
     }
-    const probeOk = await probeFirestore();
-    if (!probeOk) {
-      cloudReady = false;
-      setCloudStatus('☁️ محظور محلياً (إضافات)', 'var(--amber2)');
-      console.warn('Firestore domain appears blocked by client/extensions. Cloud disabled.');
-      return;
+    // إذا تم تمكين التجاوز يدوياً، تخطّي الفحص
+    if (!cloudForceEnable) {
+      const probeOk = await probeFirestore();
+      if (!probeOk) {
+        cloudReady = false;
+        setCloudStatus('☁️ محظور محلياً (إضافات)', 'var(--amber2)');
+        console.warn('Firestore domain appears blocked by client/extensions. Cloud disabled.');
+        return;
+      }
     }
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     cloudDb    = firebase.firestore();
@@ -1511,6 +1515,19 @@ function syncCloudRolePasswords() {
   upsertCloudRoleUser('admin',      passwords.admin);
   upsertCloudRoleUser('engineer',   passwords.engineer);
   upsertCloudRoleUser('accountant', passwords.accountant);
+}
+
+function setCloudForceEnabled(enabled) {
+  cloudForceEnable = !!enabled;
+  localStorage.setItem('cloudForceEnable', cloudForceEnable ? '1' : '0');
+  showToast(cloudForceEnable ? '☁️ التجاوز مفعل: السحابة ستُحاول الاتصال' : '☁️ التجاوز معطّل');
+  setCloudStatus(cloudForceEnable ? '☁️ التجاوز مفعل' : '☁️ غير متصل');
+}
+
+function retryCloud() {
+  initCloud().then(() => {
+    if (cloudReady) initCloudAuth().then(pullCloudData);
+  });
 }
 
 async function pullCloudData() {
@@ -2012,6 +2029,10 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
 });
 
 loadSettings();
+// فرض حالة مربع الاختيار الخاص بالتجاوز إن وُجد
+const cfEl = document.getElementById('cloudForce');
+if (cfEl) cfEl.checked = cloudForceEnable;
+
 initCloud().then(() => {
   if (cloudReady) initCloudAuth().then(pullCloudData);
 });

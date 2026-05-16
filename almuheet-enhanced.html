@@ -612,6 +612,17 @@
               </div>
             </div>
           </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:14px">السحابة</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cloudForce" onchange="setCloudForceEnabled(this.checked)"> تجاوز حجب المتصفّح (Force Cloud)</label>
+              <div style="font-size:12px;color:var(--text3)">إذا كان المتصفّح أو إضافة تحجب Firestore، فعّل التجاوز ثم اضغط "إعادة محاولة المزامنة".</div>
+              <div style="display:flex;gap:8px">
+                <button onclick="retryCloud()">🔁 إعادة محاولة المزامنة</button>
+                <button onclick="setCloudForceEnabled(false)">إيقاف التجاوز</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

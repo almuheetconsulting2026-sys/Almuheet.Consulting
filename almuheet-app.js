@@ -1536,6 +1536,40 @@ function retryCloud() {
   });
 }
 
+async function initializeCloudData(force = false) {
+  if (!cloudReady || !cloudAuthReady) {
+    showToast('⚠️ السحابة غير جاهزة. انتظر المصادقة أو اضغط إعادة المحاولة.', 'warn');
+    return;
+  }
+  try {
+    const ref = cloudDb.collection(CLOUD_DOC_PATH.collection).doc(CLOUD_DOC_PATH.doc);
+    const snap = await ref.get();
+    if (snap.exists && !force) {
+      showConfirm('تهيئة السحابة', 'المستند السحابي موجود بالفعل. هل تريد استبداله؟', () => initializeCloudData(true));
+      return;
+    }
+
+    const payload = {
+      contracts: [],
+      visits: [],
+      auditLogs: [{ type: 'system', msg: 'Initialized cloud dataset', user: 'system', time: new Date().toISOString() }],
+      passwords: passwords || { admin:'', engineer:'', accountant:'' },
+      invoices: [],
+      files: [],
+      drawingVersions: [],
+      updatedAt: new Date().toISOString()
+    };
+
+    await ref.set(payload, { merge: true });
+    showToast('✅ تم تهيئة السحابة');
+    // سحب البيانات المحدثة محلياً
+    await pullCloudData();
+  } catch (err) {
+    console.error('initializeCloudData error', err);
+    showToast('❌ تعذّر تهيئة السحابة', 'warn');
+  }
+}
+
 async function pullCloudData() {
   if (!cloudReady || !cloudDb || !cloudAuthReady) return;
   try {

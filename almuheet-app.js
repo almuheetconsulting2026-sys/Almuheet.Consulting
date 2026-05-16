@@ -1425,6 +1425,26 @@ function initCloud() {
       setCloudStatus('☁️ غير متصل بالإنترنت', 'var(--amber2)');
       return;
     }
+    // Probe Firestore domain in case a browser extension (adblock/privacy) blocks it.
+    async function probeFirestore(timeout = 2000) {
+      try {
+        const ctrl = new AbortController();
+        const id = setTimeout(() => ctrl.abort(), timeout);
+        // use no-cors to reduce CORS failures; this will still reject if the request is blocked.
+        await fetch('https://firestore.googleapis.com/', { method: 'GET', mode: 'no-cors', cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(id);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const probeOk = await probeFirestore();
+    if (!probeOk) {
+      cloudReady = false;
+      setCloudStatus('☁️ محظور محلياً (إضافات)', 'var(--amber2)');
+      console.warn('Firestore domain appears blocked by client/extensions. Cloud disabled.');
+      return;
+    }
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     cloudDb    = firebase.firestore();
     cloudReady = true;
@@ -1992,8 +2012,20 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
 });
 
 loadSettings();
-initCloud();
-initCloudAuth().then(pullCloudData);
+initCloud().then(() => {
+  if (cloudReady) initCloudAuth().then(pullCloudData);
+});
+
+// إعادة محاولة تفعيل السحابة عند تبدّل حالة الشبكة
+window.addEventListener('online', () => {
+  setCloudStatus('☁️ إعادة المحاولة...', 'var(--amber2)');
+  initCloud().then(() => {
+    if (cloudReady) initCloudAuth().then(pullCloudData);
+  });
+});
+window.addEventListener('offline', () => {
+  setCloudStatus('☁️ غير متصل بالإنترنت', 'var(--amber2)');
+});
 
 // تحقق كلمات المرور الافتراضية: ترقية النص إلى hash إذا لزم
 (async () => {

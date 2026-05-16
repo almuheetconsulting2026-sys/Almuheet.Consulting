@@ -7,13 +7,14 @@
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-let contracts   = JSON.parse(localStorage.getItem('contracts')  || '[]');
-let visits      = JSON.parse(localStorage.getItem('visits')     || '[]');
-let auditLogs   = JSON.parse(localStorage.getItem('auditLogs')  || '[]');
-let passwords   = JSON.parse(localStorage.getItem('passwords')  || '{"admin":"","engineer":"","accountant":""}');
-let invoices    = JSON.parse(localStorage.getItem('invoices')   || '[]');
-let files       = JSON.parse(localStorage.getItem('files')      || '[]');
-let drawingVersions = JSON.parse(localStorage.getItem('drawingVersions') || '[]');
+// Cloud-only mode: initialize in-memory state; data will be pulled from Firestore on startup
+let contracts   = [];
+let visits      = [];
+let auditLogs   = [];
+let passwords   = { admin:'', engineer:'', accountant:'' };
+let invoices    = [];
+let files       = [];
+let drawingVersions = [];
 let currentUser        = null;
 let currentRole        = 'admin';
 let editingId          = null;
@@ -99,6 +100,11 @@ function selectRole(el, role) {
 }
 
 async function doLogin() {
+  // Cloud-only mode: require cloud readiness before allowing login
+  if (!cloudReady || !cloudAuthReady || !cloudPullDone) {
+    showToast('⚠️ السحابة غير جاهزة حالياً. انتظر اكتمال المزامنة أو فعّل التجاوز في الإعدادات.', 'warn');
+    return;
+  }
   const passRaw  = document.getElementById('passInput').value;
   const lockKey  = 'loginLock:' + currentRole;
   const failKey  = 'loginFail:' + currentRole;
@@ -1579,8 +1585,13 @@ async function pushCloudData() {
       updatedAt: new Date().toISOString()
     }, { merge: true });
     setCloudStatus('☁️ تم الحفظ', 'var(--accent2)');
+    // clear any pending timer
+    if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
   } catch {
-    setCloudStatus('☁️ فشل الحفظ', 'var(--amber2)');
+    setCloudStatus('☁️ فشل الحفظ — سيتم إعادة المحاولة', 'var(--amber2)');
+    // إعادة المحاولة بعد تأخير أقصر
+    if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = setTimeout(pushCloudData, 2000);
   }
 }
 
@@ -1601,14 +1612,16 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - new Date()) / 86400000);
 }
 function saveData(syncCloud = true) {
-  localStorage.setItem('contracts',  JSON.stringify(contracts));
-  localStorage.setItem('visits',     JSON.stringify(visits));
-  localStorage.setItem('auditLogs',  JSON.stringify(auditLogs));
-  localStorage.setItem('passwords',  JSON.stringify(passwords));
-  localStorage.setItem('invoices',   JSON.stringify(invoices));
-  localStorage.setItem('files',      JSON.stringify(files));
-  localStorage.setItem('drawingVersions', JSON.stringify(drawingVersions));
-  if (syncCloud) queueCloudSave();
+  // In cloud-only mode we push directly to Firestore. If cloud is not ready, abort and notify.
+  if (!cloudReady || !cloudAuthReady) {
+    console.warn('Cloud not ready — cannot save.');
+    setCloudStatus('☁️ السحابة غير جاهزة للحفظ', 'var(--red2)');
+    showToast('⚠️ السحابة غير جاهزة — تعذّر الحفظ');
+    return;
+  }
+  if (syncCloud) {
+    pushCloudData();
+  }
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 

@@ -1493,7 +1493,12 @@ async function pullCloudData() {
   if (!cloudReady || !cloudDb || !cloudAuthReady) return;
   try {
     const snap = await cloudDb.collection(CLOUD_DOC_PATH.collection).doc(CLOUD_DOC_PATH.doc).get();
-    if (!snap.exists) { cloudPullDone = true; return; }
+    if (!snap.exists) {
+      // المستند غير موجود - هذا طبيعي في المرة الأولى
+      cloudPullDone = true;
+      setCloudStatus('☁️ جاهز للحفظ', 'var(--accent2)');
+      return;
+    }
     const data = snap.data() || {};
     if (Array.isArray(data.contracts))              contracts  = data.contracts;
     if (Array.isArray(data.visits))                 visits     = data.visits;
@@ -1504,8 +1509,15 @@ async function pullCloudData() {
     buildNotifications();
     cloudPullDone = true;
     setCloudStatus('☁️ مزامنة مفعلة', 'var(--accent2)');
-  } catch {
-    setCloudStatus('☁️ فشل السحب', 'var(--amber2)');
+  } catch (err) {
+    console.error('Firestore pull error:', err);
+    // إذا كان الخطأ بسبب عدم وجود المستند، فهذا طبيعي
+    if (err.code === 'permission-denied') {
+      setCloudStatus('☁️ خطأ صلاحيات Firestore', 'var(--red2)');
+    } else {
+      setCloudStatus('☁️ فشل السحب - محلي', 'var(--amber2)');
+    }
+    cloudPullDone = true; // الاستمرار بالعمل محلياً
   }
 }
 

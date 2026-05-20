@@ -2115,15 +2115,25 @@ async function pullCloudData() {
       setCloudStatus('☁️ جاهز للحفظ', 'var(--accent2)');
       return;
     }
-    if (Array.isArray(data.contracts))       contracts  = data.contracts;
-    if (Array.isArray(data.visits))          visits     = data.visits;
-    if (Array.isArray(data.auditLogs))       auditLogs  = data.auditLogs;
-    if (Array.isArray(data.invoices))        invoices   = data.invoices;
-    if (Array.isArray(data.files))           files      = data.files;
-    if (Array.isArray(data.drawingVersions)) drawingVersions = data.drawingVersions;
-    if (data.passwords && typeof data.passwords === 'object') passwords = data.passwords;
-    
-    saveData(false); // تحديث التخزين المحلي بالبيانات السحابية
+    // دمج بيانات السحابة مع المحلي بدلاً من استبدالها بالكامل
+    function mergeById(localArr, cloudArr) {
+      if (!Array.isArray(localArr)) localArr = [];
+      if (!Array.isArray(cloudArr)) return localArr;
+      const map = new Map();
+      localArr.forEach(item => { if (item && item.id) map.set(item.id, item); });
+      cloudArr.forEach(item => { if (item && item.id) map.set(item.id, item); });
+      return Array.from(map.values());
+    }
+
+    if (Array.isArray(data.contracts))       contracts  = mergeById(contracts, data.contracts);
+    if (Array.isArray(data.visits))          visits     = mergeById(visits, data.visits);
+    if (Array.isArray(data.auditLogs))       auditLogs  = mergeById(auditLogs, data.auditLogs);
+    if (Array.isArray(data.invoices))        invoices   = mergeById(invoices, data.invoices);
+    if (Array.isArray(data.files))           files      = mergeById(files, data.files);
+    if (Array.isArray(data.drawingVersions)) drawingVersions = mergeById(drawingVersions, data.drawingVersions);
+    if (data.passwords && typeof data.passwords === 'object') passwords = Object.assign({}, passwords || {}, data.passwords);
+
+    saveData(false); // تحديث التخزين المحلي بالبيانات المدموجة من السحابة
     refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
     buildNotifications();
     cloudPullDone = true;

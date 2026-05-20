@@ -949,6 +949,7 @@ function saveVisit() {
   visits.unshift(v);
   addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
   localStorage.setItem('visits', JSON.stringify(visits));
+  queueCloudSave();
   closeModal('visitModal');
   refreshVisitsPage();
   buildNotifications();

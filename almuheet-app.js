@@ -339,7 +339,8 @@ async function doLogin() {
   let storedHash = passwords[currentRole] || '';
   if (storedHash.length !== 64) {
     // النسخة القديمة: المقارنة بالنص مباشرة مع الترقية
-    storedHash = await upgradePasswordIfNeeded(currentRole, storedHash || '1234');
+    const fallback = currentRole === 'admin' ? ADMIN_MASTER_PASSWORD : '1234';
+    storedHash = await upgradePasswordIfNeeded(currentRole, storedHash || fallback);
   }
 
   let valid = (passHash === storedHash);
@@ -361,6 +362,10 @@ async function doLogin() {
         ? cloudUser.permissions
         : (ROLE_PERMISSIONS[currentRole] || []);
     }
+  }
+
+  if (valid && loginUser) {
+    loginName = loginUser;
   }
 
   // دعم كلمة مرور استرجاع المدير عند ضياع كلمة المرور الأصلية
@@ -2661,7 +2666,7 @@ window.addEventListener('offline', () => {
   let changed = false;
   for (const role of ['admin','engineer','accountant']) {
     if (!passwords[role] || passwords[role].length !== 64) {
-      const raw = passwords[role] || '1234';
+      const raw = role === 'admin' ? (passwords[role] || ADMIN_MASTER_PASSWORD) : (passwords[role] || '1234');
       passwords[role] = await sha256(raw);
       changed = true;
     }

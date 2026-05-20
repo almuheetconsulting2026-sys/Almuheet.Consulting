@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    (function () {
+      if (location.protocol === 'file:') return;
+      var p = location.pathname || '';
+      if (p.endsWith('/') || /\.(html?|php)$/i.test(p)) return;
+      if (p === '/' || p === '') return;
+      var b = document.createElement('base');
+      b.href = location.origin + p + '/';
+      document.head.insertBefore(b, document.head.firstChild);
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام المحيط - منصة التشغيل</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232da876'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="launcher-topbar">
+    <div class="brand">المحيط للاستشارات</div>
+    <div class="actions">
+      <a class="btn" href="./almuheet-enhanced.html" target="_blank" rel="noopener noreferrer">فتح في تبويب جديد</a>
+      <button class="btn primary" id="reloadAppBtn">تحديث النظام</button>
+    </div>
+  </header>
+
+  <main class="launcher-main">
+    <iframe id="appFrame" src="./almuheet-enhanced.html" title="Almuheet Contract System"></iframe>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

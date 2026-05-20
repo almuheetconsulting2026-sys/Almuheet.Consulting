@@ -1,0 +1,68 @@
+:root {
+  --bg: #0d1117;
+  --bg2: #161b22;
+  --text1: #e6edf3;
+  --text2: #8b949e;
+  --border: #30363d;
+  --accent: #2da876;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text1);
+  font-family: "IBM Plex Sans Arabic", Tahoma, sans-serif;
+  min-height: 100vh;
+}
+
+.launcher-topbar {
+  height: 56px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text1);
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 13px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.launcher-main {
+  height: calc(100vh - 56px);
+}
+
+#appFrame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}

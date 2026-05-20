@@ -655,6 +655,7 @@ function addAudit(type, msg) {
   auditLogs.unshift(entry);
   if (auditLogs.length > 500) auditLogs = auditLogs.slice(0, 500);
   localStorage.setItem('auditLogs', JSON.stringify(auditLogs));
+  queueCloudSave();
   renderAudit();
 }
 function renderAudit() {
@@ -948,8 +949,7 @@ function saveVisit() {
   };
   visits.unshift(v);
   addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
-  localStorage.setItem('visits', JSON.stringify(visits));
-  queueCloudSave();
+  saveData();
   closeModal('visitModal');
   refreshVisitsPage();
   buildNotifications();

@@ -946,11 +946,12 @@ function openVisitModal() {
   document.getElementById('visitModal').classList.add('open');
 }
 
-function saveVisit() {
+async function saveVisit() {
   const contractId = document.getElementById('v-contract').value;
   if (!contractId) { showToast('⚠️ اختر عقداً', 'warn'); return; }
   const pct = parseInt(document.getElementById('v-pct').value) || 0;
   if (pct < 0 || pct > 100) { showToast('⚠️ نسبة الإنجاز يجب أن تكون بين 0 و 100', 'warn'); return; }
+
   const v = {
     contractId,
     date:      document.getElementById('v-date').value,
@@ -960,8 +961,19 @@ function saveVisit() {
     violation: document.getElementById('v-violation').value,
     report:    document.getElementById('v-report').value,
     notes:     document.getElementById('v-notes').value,
+    attachments: [],
     id:        Date.now()
   };
+
+  // معالجة الملفات المرفوعة مع الزيارة
+  const fileInput = document.getElementById('v-files');
+  if (fileInput && fileInput.files && fileInput.files.length) {
+    for (const f of Array.from(fileInput.files)) {
+      const uploaded = await uploadFile(f, contractId, 'visit');
+      if (uploaded && uploaded.id) v.attachments.push(uploaded.id);
+    }
+  }
+
   visits.unshift(v);
   addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
   saveData();
@@ -983,7 +995,16 @@ function refreshVisitsPage() {
     return;
   }
 
-  const rows = visits.map(v => `
+  const rows = visits.map(v => {
+    const attachHtml = (v.attachments || []).map(id => {
+      const f = files.find(x => x.id === id);
+      if (!f) return '';
+      const ext = (f.name || '').split('.').pop().toLowerCase();
+      const icon = ext === 'pdf' ? '📄' : (['jpg','jpeg','png'].includes(ext) ? '🖼️' : '📁');
+      return `<a href="${esc(f.data)}" target="_blank" style="margin-right:6px">${icon} ${esc(f.name)}</a>`;
+    }).join('');
+
+    return `
     <tr>
       <td class="td-mono">${esc(v.date) || '—'}</td>
       <td class="td-main">#${esc(v.contractId)}</td>
@@ -997,8 +1018,9 @@ function refreshVisitsPage() {
       </td>
       <td>${esc(v.engineer) || '—'}</td>
       <td>${v.violation ? `<span class="tag warn">⚠️ ${esc(v.violation)}</span>` : '<span style="color:var(--text3);font-size:12px">لا توجد</span>'}</td>
-      <td style="font-size:12px;color:var(--text3)">${esc((v.notes || '').substring(0,40))}</td>
-    </tr>`).join('');
+      <td style="font-size:12px;color:var(--text3)">${esc((v.notes || '').substring(0,40))}${attachHtml?'<div style="margin-top:6px">'+attachHtml+'</div>':''}</td>
+    </tr>`;
+  }).join('');
   if (tb)      tb.innerHTML      = rows;
   if (archVis) archVis.innerHTML = rows;
 
@@ -2401,12 +2423,12 @@ function handleCreateInvoice() {
 // FILE MANAGEMENT SYSTEM
 // ═══════════════════════════════════════════════
 async function uploadFile(file, contractId = null, type = 'general') {
-  if (!file) return;
+  if (!file) return null;
 
   // التحقق من جاهزية السحابة
   if (!cloudReady || !supabaseClient) {
     showToast('⚠️ السحابة غير جاهزة لرفع الملفات', 'warn');
-    return;
+    return null;
   }
 
   const fileId = 'FILE-' + Date.now();
@@ -2448,9 +2470,11 @@ async function uploadFile(file, contractId = null, type = 'general') {
     addAudit('create', `رفع الملف ${file.name}`);
     showToast('✅ تم رفع الملف بنجاح');
     refreshFiles();
+    return fileData;
   } catch (error) {
     console.error('Upload error:', error);
     showToast('❌ فشل رفع الملف', 'warn');
+    return null;
   }
 }
 

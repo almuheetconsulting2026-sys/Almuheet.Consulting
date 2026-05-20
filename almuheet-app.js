@@ -1237,7 +1237,6 @@ function refreshArchive() {
   }
 
   // تعبئة الفلاتر
-  const regions = [...new Set(contracts.map(c => c.location).filter(Boolean))];
   const archReg = document.getElementById('archRegion');
   if (archReg) archReg.innerHTML = '<option value="">كل المناطق</option>' + regions.map(r => `<option>${esc(r)}</option>`).join('');
   renderCentralArchive();

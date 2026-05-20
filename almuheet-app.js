@@ -671,7 +671,7 @@ function renderAudit() {
     <div class="audit-item">
       <div class="audit-icon" style="background:var(--bg3);font-size:14px">${icons[l.type] || '📝'}</div>
       <div class="audit-text"><strong>${esc(l.user)}</strong> — ${esc(l.msg)}</div>
-      <div class="audit-time">${new Date(l.time).toLocaleString('ar-QA')}</div>
+      <div class="audit-time">${new Date(l.time).toLocaleString('en-US')}</div>
     </div>`).join('');
 }
 
@@ -1100,24 +1100,62 @@ function renderContractsTable() {
 // ARCHIVE
 // ═══════════════════════════════════════════════
 function refreshArchive() {
-  const ended    = contracts.filter(c => c.status === 'منتهي' || c.status === 'مكتمل');
-  const totalVal  = ended.reduce((s, c) => s + (parseFloat(c.value) || 0), 0);
-  const totalPaid = ended.reduce((s, c) => s + ((c.payments || []).reduce((a, p) => a + p.amount, 0)), 0);
+  const archYear    = (document.getElementById('archYear') || {}).value || '';
+  const archEng     = (document.getElementById('archEngFilter') || {}).value || '';
+  const archType    = (document.getElementById('archTypeFilter') || {}).value || '';
+  const archRegion  = (document.getElementById('archRegion') || {}).value || '';
+
+  const years = [...new Set(contracts.map(c => {
+    const d = c.end ? new Date(c.end) : c.createdAt ? new Date(c.createdAt) : null;
+    return d && !isNaN(d) ? d.getFullYear() : null;
+  }).filter(Boolean))].sort((a, b) => b - a);
+  const engs = [...new Set(contracts.map(c => c.engName).filter(Boolean))].sort();
+  const regions = [...new Set(contracts.map(c => c.location).filter(Boolean))].sort();
+
+  const yearSelect = document.getElementById('archYear');
+  if (yearSelect) {
+    yearSelect.innerHTML = '<option value="">كل السنوات</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+    if (archYear) yearSelect.value = archYear;
+  }
+  const engSelect = document.getElementById('archEngFilter');
+  if (engSelect) {
+    engSelect.innerHTML = '<option value="">كل المهندسين</option>' + engs.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
+    if (archEng) engSelect.value = archEng;
+  }
+  const regionSelect = document.getElementById('archRegion');
+  if (regionSelect) {
+    regionSelect.innerHTML = '<option value="">كل المناطق</option>' + regions.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    if (archRegion) regionSelect.value = archRegion;
+  }
+
+  const archiveContracts = contracts.filter(c => {
+    if (archYear) {
+      const d = c.end ? new Date(c.end) : c.createdAt ? new Date(c.createdAt) : null;
+      if (!d || isNaN(d) || String(d.getFullYear()) !== archYear) return false;
+    }
+    if (archEng && c.engName !== archEng) return false;
+    if (archType && c.type !== archType) return false;
+    if (archRegion && c.location !== archRegion) return false;
+    return true;
+  });
+
+  const ended    = archiveContracts.filter(c => c.status === 'منتهي' || c.status === 'مكتمل');
+  const totalVal  = archiveContracts.reduce((s, c) => s + (parseFloat(c.value) || 0), 0);
+  const totalPaid = archiveContracts.reduce((s, c) => s + ((c.payments || []).reduce((a, p) => a + p.amount, 0)), 0);
   const uncollected = totalVal - totalPaid;
+  const expLics = contracts.filter(c => c.licExpiry && daysUntil(c.licExpiry) <= 30 && daysUntil(c.licExpiry) >= 0).length;
 
   document.getElementById('arch-ended').textContent       = ended.length;
   document.getElementById('arch-totalval').textContent    = fmtShort(totalVal);
   document.getElementById('arch-collected').textContent   = fmtShort(totalPaid);
   document.getElementById('arch-uncollected').textContent = fmtShort(uncollected);
-
-  const expLics = contracts.filter(c => c.licExpiry && daysUntil(c.licExpiry) <= 30 && daysUntil(c.licExpiry) >= 0).length;
-  document.getElementById('sc-archive').textContent = ended.length + expLics;
+  document.getElementById('sc-archive').textContent       = archiveContracts.length + expLics;
 
   const tb = document.getElementById('archContractsTable');
-  if (!contracts.length) {
-    tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود في الأرشيف</td></tr>';
+  if (!archiveContracts.length) {
+    tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود مطابقة للفلتر</td></tr>';
   } else {
-    tb.innerHTML = contracts.map(c => {
+    tb.innerHTML = archiveContracts.map(c => {
       const paid   = (c.payments || []).reduce((s, p) => s + p.amount, 0);
       const remain = (parseFloat(c.value) || 0) - paid;
       const stCls  = { نشط:'active', مجمّد:'frozen', مكتمل:'done', منتهي:'ended' }[c.status] || 'info';
@@ -1580,7 +1618,7 @@ function exportAudit() {
 
   const rows = [['الوقت','المستخدم','النوع','التفاصيل']];
   auditLogs.forEach(l => {
-    rows.push([new Date(l.time).toLocaleString('ar-QA'), l.user, l.type, l.msg]);
+    rows.push([new Date(l.time).toLocaleString('en-US'), l.user, l.type, l.msg]);
   });
   const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
@@ -2094,13 +2132,13 @@ async function pushCloudData() {
 // UTILS
 // ═══════════════════════════════════════════════
 function fmt(n) {
-  return (parseFloat(n) || 0).toLocaleString('ar-QA', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  return (parseFloat(n) || 0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 function fmtShort(n) {
   n = parseFloat(n) || 0;
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'م';
-  if (n >= 1000)    return (n / 1000).toFixed(1) + 'ك';
-  return n.toLocaleString('ar-QA');
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000)    return (n / 1000).toFixed(1) + 'K';
+  return n.toLocaleString('en-US');
 }
 function daysUntil(dateStr) {
   if (!dateStr) return 9999;

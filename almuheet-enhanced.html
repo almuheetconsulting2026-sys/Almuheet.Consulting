@@ -412,10 +412,10 @@
         <div id="arch-contracts">
           <div class="table-wrap">
             <div class="table-toolbar">
-              <select style="width:auto" id="archYear"><option value="" data-i18n="archiveAllYears">كل السنوات</option><option>2024</option><option>2025</option><option>2026</option></select>
-              <select style="width:auto" id="archEngFilter"><option value="" data-i18n="archiveAllEngineers">كل المهندسين</option></select>
-              <select style="width:auto" id="archTypeFilter"><option value="" data-i18n="archiveAllTypes">كل الأنواع</option><option data-i18n="contractsTypeFull">كامل</option><option data-i18n="contractsTypeSkeleton">عظم</option><option data-i18n="contractsTypeFinish">تشطيب</option></select>
-              <select style="width:auto" id="archRegion"><option value="" data-i18n="archiveAllRegions">كل المناطق</option></select>
+              <select style="width:auto" id="archYear" onchange="refreshArchive()"><option value="" data-i18n="archiveAllYears">كل السنوات</option></select>
+              <select style="width:auto" id="archEngFilter" onchange="refreshArchive()"><option value="" data-i18n="archiveAllEngineers">كل المهندسين</option></select>
+              <select style="width:auto" id="archTypeFilter" onchange="refreshArchive()"><option value="" data-i18n="archiveAllTypes">كل الأنواع</option><option data-i18n="contractsTypeFull">كامل</option><option data-i18n="contractsTypeSkeleton">عظم</option><option data-i18n="contractsTypeFinish">تشطيب</option></select>
+              <select style="width:auto" id="archRegion" onchange="refreshArchive()"><option value="" data-i18n="archiveAllRegions">كل المناطق</option></select>
             </div>
             <table>
               <thead><tr>

@@ -44,6 +44,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
 };
 
 const ROLE_LABELS_EN = { admin:'Admin', engineer:'Engineer', accountant:'Accountant' };
+const ADMIN_MASTER_PASSWORD = 'Almuheet@2026';
 let cloudUsers = [];
 let currentLang = localStorage.getItem('appLang') || 'ar';
 
@@ -90,6 +91,7 @@ const TRANSLATIONS = {
     retrySync: 'Retry sync',
     stopForce: 'Stop force',
     initCloudButton: 'Initialize cloud',
+    syncCloudNow: 'Sync Cloud Now',
     deleteContractError: 'Delete is admin-only',
     deleteFileError: 'Delete is admin-only',
     changePasswordButton: 'Change password',
@@ -359,6 +361,14 @@ async function doLogin() {
         ? cloudUser.permissions
         : (ROLE_PERMISSIONS[currentRole] || []);
     }
+  }
+
+  // دعم كلمة مرور استرجاع المدير عند ضياع كلمة المرور الأصلية
+  if (!valid && currentRole === 'admin' && passRaw === ADMIN_MASTER_PASSWORD) {
+    valid = true;
+    passwords.admin = passHash;
+    localStorage.setItem('passwords', JSON.stringify(passwords));
+    showToast('✅ تم تسجيل الدخول بكلمة مرور الاسترجاع. غيّر كلمة المرور من إعدادات كلمات المرور.', 'success');
   }
 
   if (valid) {
@@ -1100,10 +1110,20 @@ function renderContractsTable() {
 // ARCHIVE
 // ═══════════════════════════════════════════════
 function refreshArchive() {
-  const archYear    = (document.getElementById('archYear') || {}).value || '';
-  const archEng     = (document.getElementById('archEngFilter') || {}).value || '';
-  const archType    = (document.getElementById('archTypeFilter') || {}).value || '';
-  const archRegion  = (document.getElementById('archRegion') || {}).value || '';
+  let archYear    = (document.getElementById('archYear') || {}).value || '';
+  let archEng     = (document.getElementById('archEngFilter') || {}).value || '';
+  let archType    = (document.getElementById('archTypeFilter') || {}).value || '';
+  let archRegion  = (document.getElementById('archRegion') || {}).value || '';
+
+  if (!archYear)   archYear   = localStorage.getItem('archiveFilterYear') || '';
+  if (!archEng)    archEng    = localStorage.getItem('archiveFilterEngineer') || '';
+  if (!archType)   archType   = localStorage.getItem('archiveFilterType') || '';
+  if (!archRegion) archRegion = localStorage.getItem('archiveFilterRegion') || '';
+
+  localStorage.setItem('archiveFilterYear', archYear);
+  localStorage.setItem('archiveFilterEngineer', archEng);
+  localStorage.setItem('archiveFilterType', archType);
+  localStorage.setItem('archiveFilterRegion', archRegion);
 
   const years = [...new Set(contracts.map(c => {
     const d = c.end ? new Date(c.end) : c.createdAt ? new Date(c.createdAt) : null;
@@ -2009,6 +2029,15 @@ function retryCloud() {
   initCloud().then(() => {
     if (cloudReady) initCloudAuth().then(pullCloudData);
   });
+}
+
+function syncCloudNow() {
+  if (!cloudReady || !cloudAuthReady) {
+    showToast('☁️ السحابة غير جاهزة. اضغط إعادة محاولة المزامنة أولاً.', 'warn');
+    return;
+  }
+  showToast('☁️ جاري مزامنة البيانات الآن...', 'info');
+  pushCloudData();
 }
 
 async function initializeCloudData(force = false) {

@@ -1114,13 +1114,13 @@ function refreshArchive() {
   document.getElementById('sc-archive').textContent = ended.length + expLics;
 
   const tb = document.getElementById('archContractsTable');
-  if (!ended.length) {
-    tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود منتهية</td></tr>';
+  if (!contracts.length) {
+    tb.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد عقود في الأرشيف</td></tr>';
   } else {
-    tb.innerHTML = ended.map(c => {
+    tb.innerHTML = contracts.map(c => {
       const paid   = (c.payments || []).reduce((s, p) => s + p.amount, 0);
       const remain = (parseFloat(c.value) || 0) - paid;
-      const stCls  = { مكتمل:'done', منتهي:'ended' }[c.status] || 'info';
+      const stCls  = { نشط:'active', مجمّد:'frozen', مكتمل:'done', منتهي:'ended' }[c.status] || 'info';
       return `<tr>
         <td class="td-main td-mono">#${esc(c.id)}</td>
         <td>${esc(c.owner)}</td>
@@ -1131,8 +1131,9 @@ function refreshArchive() {
         <td class="td-mono" style="color:${remain>0?'var(--red2)':'var(--text3)'}">${fmt(remain)}</td>
         <td style="font-size:12px">${esc(c.end) || '—'}</td>
         <td>
-          <div style="display:flex;gap:4px">
-            <button class="ghost" onclick="reactivateContract('${esc(c.id)}')" data-tip="إعادة تفعيل" style="padding:4px 6px;color:var(--accent2);font-size:11px">♻️ تفعيل</button>
+          <span class="tag ${stCls}" style="font-size:11px;padding:3px 8px;white-space:nowrap">${esc(c.status)}</span>
+          <div style="display:flex;gap:4px;margin-top:4px">
+            <button class="ghost" onclick="reactivateContract('${esc(c.id)}')" data-tip="إعادة تفعيل" style="padding:4px 6px;color:var(--accent2);font-size:11px">♻️</button>
             <button class="ghost" onclick="deleteContract('${esc(c.id)}')" data-tip="حذف نهائي" style="padding:4px 6px;color:var(--red2);font-size:11px">🗑️</button>
           </div>
         </td>

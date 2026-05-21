@@ -16,6 +16,7 @@ let invoices    = [];
 let files       = [];
 let drawingVersions = [];
 let engineers   = [];
+let officeSettings = {};
 let currentUser        = null;
 let currentRole        = 'admin';
 let editingId          = null;
@@ -29,7 +30,7 @@ const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 const ROLE_LABELS  = { admin:'مدير النظام', engineer:'مهندس', accountant:'محاسب' };
 const ROLE_CLASSES = { admin:'role-admin', engineer:'role-eng', accountant:'role-acc' };
 const ROLE_AVATARS = { admin:'م', engineer:'م', accountant:'ح' };
-const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','files','drawingVersions','engineers'];
+const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','files','drawingVersions','engineers','officeSettings'];
 
 // صلاحيات مفصّلة: تعديل العقود يحتاج صلاحية contracts.edit
 const ROLE_PERMISSIONS = {
@@ -47,7 +48,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
 const ROLE_LABELS_EN = { admin:'Admin', engineer:'Engineer', accountant:'Accountant' };
 const ADMIN_MASTER_PASSWORD = 'Almuheet@2026';
 let cloudUsers = [];
-let currentLang = localStorage.getItem('appLang') || 'ar';
+let currentLang = 'ar';
 
 const TRANSLATIONS = {
   en: {
@@ -271,7 +272,7 @@ let cloudReady     = false;
 let cloudSaveTimer = null;
 let cloudPullDone  = false;
 let cloudAuthReady = false;
-let cloudForceEnable = localStorage.getItem('cloudForceEnable') === '1';
+let cloudForceEnable = false;
 let currentPermissions = [];
 
 // ═══════════════════════════════════════════════
@@ -290,7 +291,6 @@ async function upgradePasswordIfNeeded(role, rawPass) {
     // لا يوجد hash مخزن بعد — هذه أول مرة
     const hashed = await sha256(rawPass);
     passwords[role] = hashed;
-    localStorage.setItem('passwords', JSON.stringify(passwords));
     return hashed;
   }
   return passwords[role];
@@ -374,8 +374,7 @@ async function doLogin() {
   if (!valid && currentRole === 'admin' && passRaw === ADMIN_MASTER_PASSWORD) {
     valid = true;
     passwords.admin = passHash;
-    localStorage.setItem('passwords', JSON.stringify(passwords));
-    showToast('✅ تم تسجيل الدخول بكلمة مرور الاسترجاع. غيّر كلمة المرور من إعدادات كلمات المرور.', 'success');
+
   }
 
   if (valid) {
@@ -460,7 +459,6 @@ async function savePasswords() {
   if (engRaw)   passwords.engineer   = await sha256(engRaw);
   if (accRaw)   passwords.accountant = await sha256(accRaw);
 
-  localStorage.setItem('passwords', JSON.stringify(passwords));
   syncCloudRolePasswords();
   showToast('✅ تم حفظ كلمات المرور');
 
@@ -489,7 +487,10 @@ function hasPermission(permission) {
 
 function setLanguage(lang) {
   currentLang = lang === 'en' ? 'en' : 'ar';
-  localStorage.setItem('appLang', currentLang);
+  // persist language in cloud-backed officeSettings
+  if (!officeSettings || typeof officeSettings !== 'object') officeSettings = {};
+  officeSettings.appLang = currentLang;
+  saveData();
   document.documentElement.lang = currentLang;
   document.documentElement.dir = currentLang === 'en' ? 'ltr' : 'rtl';
   const langBtn = document.getElementById('langBtn');
@@ -672,7 +673,6 @@ function addAudit(type, msg) {
   const entry = { type, msg, user: currentUser || '—', time: new Date().toISOString() };
   auditLogs.unshift(entry);
   if (auditLogs.length > 500) auditLogs = auditLogs.slice(0, 500);
-  localStorage.setItem('auditLogs', JSON.stringify(auditLogs));
   queueCloudSave();
   renderAudit();
 }
@@ -1172,15 +1172,15 @@ function refreshArchive() {
   let archType    = (document.getElementById('archTypeFilter') || {}).value || '';
   let archRegion  = (document.getElementById('archRegion') || {}).value || '';
 
-  if (!archYear)   archYear   = localStorage.getItem('archiveFilterYear') || '';
-  if (!archEng)    archEng    = localStorage.getItem('archiveFilterEngineer') || '';
-  if (!archType)   archType   = localStorage.getItem('archiveFilterType') || '';
-  if (!archRegion) archRegion = localStorage.getItem('archiveFilterRegion') || '';
+  const af = (officeSettings && officeSettings.archiveFilters) ? officeSettings.archiveFilters : {};
+  if (!archYear)   archYear   = af.year || '';
+  if (!archEng)    archEng    = af.engineer || '';
+  if (!archType)   archType   = af.type || '';
+  if (!archRegion) archRegion = af.region || '';
 
-  localStorage.setItem('archiveFilterYear', archYear);
-  localStorage.setItem('archiveFilterEngineer', archEng);
-  localStorage.setItem('archiveFilterType', archType);
-  localStorage.setItem('archiveFilterRegion', archRegion);
+  if (!officeSettings || typeof officeSettings !== 'object') officeSettings = {};
+  officeSettings.archiveFilters = { year: archYear, engineer: archEng, type: archType, region: archRegion };
+  saveData(false);
 
   const years = [...new Set(contracts.map(c => {
     const d = c.end ? new Date(c.end) : c.createdAt ? new Date(c.createdAt) : null;
@@ -1857,16 +1857,32 @@ function saveSettings() {
   const phones  = document.getElementById('set-phones') ? document.getElementById('set-phones').value   : '';
 
   const settings = { nameAr, nameEn, licNo, phones };
-  localStorage.setItem('officeSettings', JSON.stringify(settings));
+  officeSettings = settings;
+  saveData();
   showToast('✅ تم حفظ إعدادات المكتب');
 }
 
 function loadSettings() {
-  const s = JSON.parse(localStorage.getItem('officeSettings') || '{}');
-  if (document.getElementById('set-nameAr') && s.nameAr) document.getElementById('set-nameAr').value = s.nameAr;
-  if (document.getElementById('set-nameEn') && s.nameEn) document.getElementById('set-nameEn').value = s.nameEn;
-  if (document.getElementById('set-licNo')  && s.licNo)  document.getElementById('set-licNo').value  = s.licNo;
-  if (document.getElementById('set-phones') && s.phones) document.getElementById('set-phones').value = s.phones;
+  const s = (officeSettings && Object.keys(officeSettings).length) ? officeSettings : {};
+  if (!officeSettings || !Object.keys(officeSettings).length) officeSettings = s;
+  if (document.getElementById('set-nameAr')) document.getElementById('set-nameAr').value = s.nameAr || '';
+  if (document.getElementById('set-nameEn')) document.getElementById('set-nameEn').value = s.nameEn || '';
+  if (document.getElementById('set-licNo'))  document.getElementById('set-licNo').value  = s.licNo || '';
+  if (document.getElementById('set-phones')) document.getElementById('set-phones').value = s.phones || '';
+  // Apply UI preferences if present in cloud-backed officeSettings
+  if (s.theme) document.documentElement.setAttribute('data-theme', s.theme);
+  if (s.appLang) setLanguage(s.appLang);
+  if (typeof s.cloudForceEnable !== 'undefined') {
+    cloudForceEnable = !!s.cloudForceEnable;
+    const cfEl = document.getElementById('cloudForce');
+    if (cfEl) cfEl.checked = cloudForceEnable;
+  }
+  if (s.archiveFilters && typeof s.archiveFilters === 'object') {
+    if (document.getElementById('archYear')) document.getElementById('archYear').value = s.archiveFilters.year || '';
+    if (document.getElementById('archEngFilter')) document.getElementById('archEngFilter').value = s.archiveFilters.engineer || '';
+    if (document.getElementById('archType')) document.getElementById('archType').value = s.archiveFilters.type || '';
+    if (document.getElementById('archRegion')) document.getElementById('archRegion').value = s.archiveFilters.region || '';
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -2161,7 +2177,9 @@ async function deleteCloudUser(username) {
 
 function setCloudForceEnabled(enabled) {
   cloudForceEnable = !!enabled;
-  localStorage.setItem('cloudForceEnable', cloudForceEnable ? '1' : '0');
+  if (!officeSettings || typeof officeSettings !== 'object') officeSettings = {};
+  officeSettings.cloudForceEnable = cloudForceEnable ? 1 : 0;
+  saveData();
   showToast(cloudForceEnable ? '☁️ التجاوز مفعل: السحابة ستُحاول الاتصال' : '☁️ التجاوز معطّل');
   setCloudStatus(cloudForceEnable ? '☁️ التجاوز مفعل' : '☁️ غير متصل');
 }
@@ -2208,6 +2226,8 @@ async function initializeCloudData(force = false) {
       invoices: invoices.length ? invoices : [],
       files: files.length ? files : [],
       drawingVersions: drawingVersions.length ? drawingVersions : [],
+      engineers: engineers.length ? engineers : [],
+      officeSettings: officeSettings || {},
       updatedAt: new Date().toISOString()
     };
     console.log('Upserting payload:', fullPayload);
@@ -2222,23 +2242,7 @@ async function initializeCloudData(force = false) {
 }
 
 async function pullCloudData() {
-  // تحميل أولي من localStorage لضمان استجابة التطبيق
-  STORAGE_KEYS.forEach(k => {
-    const local = localStorage.getItem(k);
-    if (local) {
-      try {
-        const parsed = JSON.parse(local);
-        if (k === 'contracts') contracts = parsed;
-        if (k === 'visits') visits = parsed;
-        if (k === 'auditLogs') auditLogs = parsed;
-        if (k === 'passwords') passwords = parsed;
-        if (k === 'invoices') invoices = parsed;
-        if (k === 'files') files = parsed;
-        if (k === 'drawingVersions') drawingVersions = parsed;
-      } catch (e) {}
-    }
-  });
-  refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
+
 
   if (!cloudReady || !supabaseClient || !cloudAuthReady) {
     cloudPullDone = true;
@@ -2268,9 +2272,11 @@ async function pullCloudData() {
     if (Array.isArray(data.invoices))        invoices   = mergeById(invoices, data.invoices);
     if (Array.isArray(data.files))           files      = mergeById(files, data.files);
     if (Array.isArray(data.drawingVersions)) drawingVersions = mergeById(drawingVersions, data.drawingVersions);
+    if (Array.isArray(data.engineers))       engineers  = mergeById(engineers, data.engineers);
     if (data.passwords && typeof data.passwords === 'object') passwords = Object.assign({}, passwords || {}, data.passwords);
+    if (data.officeSettings && typeof data.officeSettings === 'object') officeSettings = Object.assign({}, officeSettings || {}, data.officeSettings);
 
-    saveData(false); // تحديث التخزين المحلي بالبيانات المدموجة من السحابة
+    if (officeSettings && Object.keys(officeSettings).length) loadSettings();
     refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
     buildNotifications();
     cloudPullDone = true;
@@ -2296,6 +2302,7 @@ async function pushCloudData() {
       id: CLOUD_DOC_PATH.id,
       contracts, visits, auditLogs, passwords,
       invoices, files, drawingVersions,
+      engineers, officeSettings,
       updatedAt: new Date().toISOString()
     });
     setCloudStatus('☁️ تم الحفظ', 'var(--accent2)');
@@ -2325,23 +2332,9 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - new Date()) / 86400000);
 }
 function saveData(syncCloud = true) {
-  // حفظ محلي احتياطي
-  STORAGE_KEYS.forEach(k => {
-    let val = null;
-    if (k === 'contracts') val = contracts;
-    if (k === 'visits') val = visits;
-    if (k === 'auditLogs') val = auditLogs;
-    if (k === 'passwords') val = passwords;
-    if (k === 'invoices') val = invoices;
-    if (k === 'files') val = files;
-    if (k === 'drawingVersions') val = drawingVersions;
-    if (k === 'engineers') val = engineers;
-    if (val) localStorage.setItem(k, JSON.stringify(val));
-  });
-
   if (syncCloud) {
     if (!cloudReady || !cloudAuthReady) {
-      console.warn('Cloud not ready — save queued or local only.');
+      console.warn('Cloud not ready — save queued until available.');
       setCloudStatus('☁️ جاري انتظار السحابة...', 'var(--amber2)');
       return;
     }
@@ -2742,7 +2735,6 @@ function resetSystemData() {
   showConfirm('تصفير بيانات النظام', 'سيتم حذف العقود والزيارات والسجل. هل تريد المتابعة؟', () => {
     contracts = []; visits = []; auditLogs = [];
     STORAGE_KEYS.forEach(k => localStorage.removeItem(k));
-    localStorage.setItem('passwords', JSON.stringify(passwords));
     saveData();
     refreshAll(); refreshPayments(); refreshVisitsPage(); refreshArchive(); renderAudit();
     buildNotifications();
@@ -2771,7 +2763,9 @@ function toggleTheme() {
   const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = cur === 'light' ? 'dark' : 'light';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
+  if (!officeSettings || typeof officeSettings !== 'object') officeSettings = {};
+  officeSettings.theme = next;
+  saveData();
 }
 
 // ═══════════════════════════════════════════════
@@ -2779,7 +2773,10 @@ function toggleTheme() {
 // ═══════════════════════════════════════════════
 setLanguage(currentLang);
 document.getElementById('v-date').value = new Date().toISOString().split('T')[0];
-document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+// theme is loaded from cloud-backed officeSettings via loadSettings()
+if (!document.documentElement.getAttribute('data-theme')) {
+  document.documentElement.setAttribute('data-theme', 'dark');
+}
 
 // debounce للأحداث المتكررة لتحسين الأداء
 ['click','keydown','mousemove','scroll'].forEach(evt => {
@@ -2790,7 +2787,6 @@ document.documentElement.setAttribute('data-theme', localStorage.getItem('theme'
   }, { passive: true });
 });
 
-loadSettings();
 // فرض حالة مربع الاختيار الخاص بالتجاوز إن وُجد
 const cfEl = document.getElementById('cloudForce');
 if (cfEl) cfEl.checked = cloudForceEnable;
@@ -2820,5 +2816,4 @@ window.addEventListener('offline', () => {
       changed = true;
     }
   }
-  if (changed) localStorage.setItem('passwords', JSON.stringify(passwords));
 })();

@@ -272,6 +272,7 @@ let cloudReady     = false;
 let cloudSaveTimer = null;
 let cloudPullDone  = false;
 let cloudAuthReady = false;
+let pendingCloudSave = false;
 let cloudForceEnable = false;
 let currentPermissions = [];
 
@@ -1944,14 +1945,19 @@ async function initCloudAuth() {
     return;
   }
   try {
-    // Supabase uses anon key by default, no need for anonymous auth
+    const { data, error } = await supabaseClient.from('users').select('username').limit(1);
+    if (error) throw error;
     cloudAuthReady = true;
     setCloudStatus('☁️ مصادق', 'var(--accent2)');
     syncCloudRolePasswords();
+    if (pendingCloudSave) {
+      pendingCloudSave = false;
+      queueCloudSave();
+    }
   } catch (err) {
     cloudAuthReady = false;
     console.error('Supabase auth error:', err);
-    setCloudStatus('☁️ فشل التوثيق - محلي', 'var(--amber2)');
+    setCloudStatus('☁️ فشل التوثيق - تحقق من مفتاح Supabase', 'var(--amber2)');
     // الاستمرار بالعمل محلياً إذا فشلت المصادقة
   }
 }
@@ -2309,6 +2315,12 @@ async function pushCloudData() {
     if (cloudSaveTimer) { clearTimeout(cloudSaveTimer); cloudSaveTimer = null; }
   } catch (err) {
     console.error('Push error:', err);
+    const isAuthFailure = err && (err.status === 401 || err.status === 403 || (err.code && String(err.code).startsWith('40')));
+    if (isAuthFailure) {
+      cloudAuthReady = false;
+      setCloudStatus('☁️ فشل التوثيق — تحقق من مفتاح Supabase', 'var(--red2)');
+      return;
+    }
     setCloudStatus('☁️ فشل الحفظ — سيتم إعادة المحاولة', 'var(--amber2)');
     if (cloudSaveTimer) clearTimeout(cloudSaveTimer);
     cloudSaveTimer = setTimeout(pushCloudData, 3000);
@@ -2334,10 +2346,12 @@ function daysUntil(dateStr) {
 function saveData(syncCloud = true) {
   if (syncCloud) {
     if (!cloudReady || !cloudAuthReady) {
+      pendingCloudSave = true;
       console.warn('Cloud not ready — save queued until available.');
       setCloudStatus('☁️ جاري انتظار السحابة...', 'var(--amber2)');
       return;
     }
+    pendingCloudSave = false;
     queueCloudSave();
   }
 }

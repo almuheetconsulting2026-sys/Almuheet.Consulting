@@ -23,3 +23,6 @@ Thumbs.db
 # Environment files
 .env
 .env.local
+
+# Local helper scripts
+push_changes.py

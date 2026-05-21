@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
-// Cloud-only mode: initialize in-memory state; data will be pulled from Firestore on startup
+// Cloud-only mode: initialize in-memory state; data will be pulled from Supabase on startup
 let contracts   = [];
 let visits      = [];
 let auditLogs   = [];
@@ -1870,7 +1870,7 @@ function loadSettings() {
 }
 
 // ═══════════════════════════════════════════════
-// CLOUD — Firebase
+// CLOUD — Supabase
 // ═══════════════════════════════════════════════
 function setCloudStatus(text, colorVar = 'var(--text3)') {
   const el = document.getElementById('cloudStatus');

@@ -78,6 +78,23 @@
       <button class="ghost" onclick="logout()" data-tip="خروج">⇤</button>
     </div>
   </div>
+      <!-- ═══════════════ ENGINEERS ═══════════════ -->
+      <div class="page" id="page-engineers">
+        <div class="section-header">
+          <div class="section-title">👷‍♂️ إدارة المهندسين</div>
+          <div class="section-actions">
+            <button onclick="openNewEngineer()">➕ إضافة مهندس</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>الرقم</th><th>الاسم</th><th>التخصص</th><th>الهاتف</th><th>إجراءات</th></tr>
+            </thead>
+            <tbody id="engineersTable"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">لا توجد مهندسين</td></tr></tbody>
+          </table>
+        </div>
+      </div>
 
   <!-- NOTIFICATION PANEL -->
   <div class="notif-panel" id="notifPanel">
@@ -266,6 +283,7 @@
                 <th onclick="sortBy('id')" data-i18n="contractsHeaderId">رقم العقد ↕</th>
                 <th onclick="sortBy('owner')" data-i18n="contractsHeaderOwner">المالك ↕</th>
                 <th data-i18n="contractsHeaderContact">رقم التواصل</th>
+                <th>المنطقة</th>
                 <th onclick="sortBy('type')" data-i18n="contractsHeaderType">النوع ↕</th>
                 <th onclick="sortBy('status')" data-i18n="contractsHeaderStatus">الحالة ↕</th>
                 <th data-i18n="contractsHeaderEngineer">المهندس</th>
@@ -419,7 +437,7 @@
             </div>
             <table>
               <thead><tr>
-                <th data-i18n="archiveHeaderContract">رقم العقد</th><th data-i18n="archiveHeaderOwner">المالك</th><th data-i18n="archiveHeaderType">النوع</th><th data-i18n="archiveHeaderEngineer">المهندس</th><th data-i18n="archiveHeaderValue">القيمة</th><th data-i18n="archiveHeaderCollected">المحصّل</th><th data-i18n="archiveHeaderRemaining">المتبقي</th><th data-i18n="archiveHeaderEndDate">تاريخ الانتهاء</th><th data-i18n="archiveHeaderAction">إجراءات</th>
+                <th data-i18n="archiveHeaderContract">رقم العقد</th><th data-i18n="archiveHeaderOwner">المالك</th><th>المنطقة</th><th data-i18n="archiveHeaderType">النوع</th><th data-i18n="archiveHeaderEngineer">المهندس</th><th data-i18n="archiveHeaderValue">القيمة</th><th data-i18n="archiveHeaderCollected">المحصّل</th><th data-i18n="archiveHeaderRemaining">المتبقي</th><th data-i18n="archiveHeaderEndDate">تاريخ الانتهاء</th><th data-i18n="archiveHeaderAction">إجراءات</th>
               </tr></thead>
               <tbody id="archContractsTable">
                 <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px" data-i18n="archiveContractsEmpty">لا توجد عقود في الأرشيف</td></tr>
@@ -457,7 +475,7 @@
               <input type="text" id="arch-docs-search" placeholder="بحث في المستندات..." oninput="renderCentralArchive()" data-i18n="archiveDocsSearchPlaceholder" data-i18n-placeholder="true">
             </div>
             <select id="arch-docs-type" style="width:auto" onchange="renderCentralArchive()">
-              <option data-i18n="archiveDocsAllTypes">كل الأنواع</option><option data-i18n="archiveDocsTypeLicense">رخصة</option><option data-i18n="archiveDocsTypeDrawings">مخططات</option><option data-i18n="archiveDocsTypePhotos">صور</option><option data-i18n="archiveDocsTypeLetters">مراسلات</option>
+              <option data-i18n="archiveDocsAllTypes">كل الأنواع</option><option data-i18n="archiveDocsTypeLicense">رخصة</option><option data-i18n="archiveDocsTypeDrawings">مخططات</option><option data-i18n="archiveDocsTypePhotos">صور</option><option data-i18n="archiveDocsTypeLetters">مراسلات</option><option>عقد</option>
             </select>
           </div>
           <div id="centralDocsList" style="text-align:center;color:var(--text3);padding:40px;font-size:13px" data-i18n="archiveDocsEmpty">📁 المستندات المركزية ستظهر هنا عند إضافة عقود تحتوي على مرفقات</div>
@@ -685,6 +703,7 @@
           <div class="form-group"><label>نوع الإشراف</label>
             <select id="f-type"><option>كامل</option><option>عظم</option><option>تشطيب</option></select>
           </div>
+          <div class="form-group"><label>ملف العقد</label><input type="file" id="f-files" accept=".pdf,.doc,.docx,.jpg,.jpeg" multiple></div>
           <div class="form-group"><label>طريقة الدفع</label>
             <select id="f-paymethod"><option>شهري</option><option>مقطوعية</option></select>
           </div>
@@ -707,7 +726,9 @@
       <!-- ENGINEER -->
       <div id="ct-engineer" style="display:none">
         <div class="form-grid">
-          <div class="form-group"><label>اسم المهندس المشرف</label><input type="text" id="f-engName" placeholder="اسم المهندس"></div>
+          <div class="form-group"><label>اسم المهندس المشرف</label>
+            <select id="f-eng-select"><option value="">اختر مهندساً</option></select>
+          </div>
           <div class="form-group"><label>رقم التواصل</label><input type="text" id="f-engPhone" placeholder="رقم الهاتف"></div>
           <div class="form-group span2"><label>رقم القيد المهني</label><input type="text" id="f-engReg" placeholder="رقم القيد"></div>
         </div>
@@ -867,6 +888,30 @@
     </div>
   </div>
 </div>
+
+  <!-- ENGINEER MODAL -->
+  <div class="modal-overlay" id="engineerModal">
+    <div class="modal" style="width:520px">
+      <div class="modal-header">
+        <div class="modal-title" id="engineerModalTitle">➕ إضافة مهندس جديد</div>
+        <button class="ghost" onclick="closeModal('engineerModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group"><label>الرقم</label><input type="text" id="e-id" readonly></div>
+          <div class="form-group"><label>اسم المهندس</label><input type="text" id="e-name"></div>
+          <div class="form-group"><label>التخصص</label><input type="text" id="e-specialty"></div>
+          <div class="form-group"><label>الهاتف</label><input type="text" id="e-phone"></div>
+          <div class="form-group"><label>رقم الهوية</label><input type="text" id="e-idnum"></div>
+          <div class="form-group"><label>رقم القيد المهني</label><input type="text" id="e-reg"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeModal('engineerModal')">إلغاء</button>
+        <button class="primary" onclick="saveEngineer()">💾 حفظ</button>
+      </div>
+    </div>
+  </div>
 
 <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)">
 

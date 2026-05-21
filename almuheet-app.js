@@ -15,6 +15,7 @@ let passwords   = { admin:'', engineer:'', accountant:'' };
 let invoices    = [];
 let files       = [];
 let drawingVersions = [];
+let engineers   = [];
 let currentUser        = null;
 let currentRole        = 'admin';
 let editingId          = null;
@@ -28,7 +29,7 @@ const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 const ROLE_LABELS  = { admin:'مدير النظام', engineer:'مهندس', accountant:'محاسب' };
 const ROLE_CLASSES = { admin:'role-admin', engineer:'role-eng', accountant:'role-acc' };
 const ROLE_AVATARS = { admin:'م', engineer:'م', accountant:'ح' };
-const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','files','drawingVersions'];
+const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','files','drawingVersions','engineers'];
 
 // صلاحيات مفصّلة: تعديل العقود يحتاج صلاحية contracts.edit
 const ROLE_PERMISSIONS = {
@@ -260,7 +261,8 @@ const DEFAULT_DOCUMENT_TITLE = 'نظام إدارة العقود - المحيط 
 // إعدادات Supabase — يُنصح بنقلها لملف .env في بيئة الإنتاج
 const supabaseConfig = {
   url: "https://reaogvzxsvkeqrdkcqyz.supabase.co",
-  key: "sb_publishable_1z_CNkQGwwIydOhaUiCHSA_LpYlUdSZ"
+  // Updated anon/public key provided by user (do NOT commit this key to a public repo)
+  key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlYW9ndnp4c3ZrZXFyZGtjcXl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMDAyNDgsImV4cCI6MjA5NDc3NjI0OH0.XYrL6Okp6-iecwmuQTB18R79tTh9QX5g21pPuH9hoyQ"
 };
 
 const CLOUD_DOC_PATH = { table:'systems', id:'main' };
@@ -493,7 +495,7 @@ function setLanguage(lang) {
   const langBtn = document.getElementById('langBtn');
   if (langBtn) langBtn.textContent = currentLang === 'en' ? 'AR' : 'EN';
   translateUI();
-  document.title = TRANSLATIONS[currentLang]?.pageTitle || DEFAULT_DOCUMENT_TITLE;
+  document.title = (TRANSLATIONS[currentLang] && TRANSLATIONS[currentLang].pageTitle) || DEFAULT_DOCUMENT_TITLE;
   const dashDateEl = document.getElementById('dashDate');
   const auditNowEl = document.getElementById('auditNow');
   const locale = currentLang === 'en' ? 'en-US' : 'ar-QA';
@@ -541,6 +543,7 @@ function showPage(id, topBtn, sideBtn) {
   if (id === 'visits')   refreshVisitsPage();
   if (id === 'invoices') refreshInvoices();
   if (id === 'files')    refreshFiles();
+  if (id === 'engineers') renderEngineersTable();
   closeNotif();
 }
 
@@ -699,6 +702,7 @@ function openNewContract() {
   pendingStages   = [];
   document.getElementById('contractModalTitle').textContent = '➕ إضافة عقد جديد';
   clearContractForm();
+  renderEngineerSelect();
   document.getElementById('contractModal').classList.add('open');
   document.getElementById('p-date').value  = new Date().toISOString().split('T')[0];
   document.getElementById('f-start').value = new Date().toISOString().split('T')[0];
@@ -708,11 +712,13 @@ function openNewContract() {
 
 function clearContractForm() {
   ['f-id','f-owner','f-phone','f-ownerId','f-duration','f-value',
-   'f-location','f-buildLic','f-notes','f-engName','f-engPhone','f-engReg',
+    'f-location','f-buildLic','f-notes','f-eng-select','f-engPhone','f-engReg',
    'f-land','tpl-req','tpl-area','tpl-plot','tpl-comp'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const fileInput = document.getElementById('f-files');
+  if (fileInput) fileInput.value = '';
   document.getElementById('f-status').value    = 'نشط';
   document.getElementById('f-type').value      = 'كامل';
   document.getElementById('f-paymethod').value = 'شهري';
@@ -736,16 +742,20 @@ function editContract(id) {
   set('f-id',c.id); set('f-owner',c.owner); set('f-phone',c.phone);
   set('f-ownerId',c.ownerId); set('f-duration',c.duration); set('f-value',c.value);
   set('f-location',c.location); set('f-buildLic',c.buildLic); set('f-notes',c.notes);
-  set('f-engName',c.engName); set('f-engPhone',c.engPhone); set('f-engReg',c.engReg);
+  const engSel = document.getElementById('f-eng-select'); if (engSel) engSel.value = c.engName || '';
+  set('f-engPhone',c.engPhone); set('f-engReg',c.engReg);
   set('f-land',c.land); set('f-start',c.start); set('f-end',c.end); set('f-licExpiry',c.licExpiry);
   set('f-status',c.status); set('f-type',c.type); set('f-paymethod',c.paymethod);
   set('tpl-req',c.tplReq); set('tpl-area',c.tplArea); set('tpl-plot',c.tplPlot); set('tpl-comp',c.tplComp);
+  const fileInput = document.getElementById('f-files');
+  if (fileInput) fileInput.value = '';
+  renderEngineerSelect();
   renderPaymentsList();
   renderStages();
   document.getElementById('contractModal').classList.add('open');
 }
 
-function saveContract() {
+async function saveContract() {
   if (!hasPermission('contracts.edit')) {
     showToast('⛔ لا تملك صلاحية حفظ العقود', 'warn');
     return;
@@ -769,6 +779,16 @@ function saveContract() {
     return;
   }
 
+  const existingAttachments = editingId ? (contracts.find(x => x.id === editingId) || {}).attachments || [] : [];
+  const attachments = [...existingAttachments];
+  const fileInput = document.getElementById('f-files');
+  if (fileInput && fileInput.files && fileInput.files.length) {
+    for (const f of Array.from(fileInput.files)) {
+      const uploaded = await uploadFile(f, id, 'contract');
+      if (uploaded && uploaded.id) attachments.push(uploaded.id);
+    }
+  }
+
   const c = {
     id, owner,
     phone,
@@ -785,7 +805,7 @@ function saveContract() {
     buildLic:  document.getElementById('f-buildLic').value,
     licExpiry: document.getElementById('f-licExpiry').value,
     notes:     document.getElementById('f-notes').value,
-    engName:   document.getElementById('f-engName').value,
+    engName:   (document.getElementById('f-eng-select') || {}).value || document.getElementById('f-engName') && document.getElementById('f-engName').value || '',
     engPhone:  document.getElementById('f-engPhone').value,
     engReg:    document.getElementById('f-engReg').value,
     tplReq:    document.getElementById('tpl-req').value,
@@ -794,6 +814,7 @@ function saveContract() {
     tplComp:   document.getElementById('tpl-comp').value,
     payments:  [...pendingPayments],
     stages:    [...pendingStages],
+    attachments,
     createdAt: editingId ? (contracts.find(x => x.id === editingId) || {}).createdAt : new Date().toISOString()
   };
 
@@ -1104,10 +1125,19 @@ function renderContractsTable() {
     const end      = c.end ? new Date(c.end) : null;
     const daysLeft = end ? Math.round((end - today) / 86400000) : null;
     const expWarn  = daysLeft !== null && daysLeft <= 30 && daysLeft >= 0;
+    const attachmentsHtml = (c.attachments || []).map(id => {
+      const f = files.find(x => x.id === id);
+      if (!f) return '';
+      const ext = (f.name || '').split('.').pop().toLowerCase();
+      const icon = ext === 'pdf' ? '📄' : (['jpg','jpeg','png'].includes(ext) ? '🖼️' : '📁');
+      return `<a href="${esc(f.data)}" target="_blank" style="margin-right:6px;font-size:12px">${icon} ${esc(f.name)}</a>`;
+    }).join('');
+
     return `<tr>
       <td class="td-main td-mono">#${esc(c.id)}</td>
       <td>
         <div style="font-weight:500">${esc(c.owner)}</div>
+        ${attachmentsHtml ? `<div style="margin-top:6px">${attachmentsHtml}</div>` : ''}
         ${expWarn ? `<span class="tag warn" style="margin-top:2px">⏰ ينتهي بعد ${daysLeft} يوم</span>` : ''}
       </td>
       <td style="font-size:12px">${esc(c.phone) || '—'}</td>
@@ -1206,9 +1236,27 @@ function refreshArchive() {
       const paid   = (c.payments || []).reduce((s, p) => s + p.amount, 0);
       const remain = (parseFloat(c.value) || 0) - paid;
       const stCls  = { نشط:'active', مجمّد:'frozen', مكتمل:'done', منتهي:'ended' }[c.status] || 'info';
-      return `<tr>
+      const attachmentsHtml = (c.attachments || []).map(id => {
+      const f = files.find(x => x.id === id);
+      if (!f) return '';
+      const ext = (f.name || '').split('.').pop().toLowerCase();
+      const icon = ext === 'pdf' ? '📄' : (['jpg','jpeg','png'].includes(ext) ? '🖼️' : '📁');
+      return `<a href="${esc(f.data)}" target="_blank" style="margin-right:6px;font-size:12px">${icon} ${esc(f.name)}</a>`;
+    }).join('');
+    const archiveActions = currentRole === 'admin' ? `
+          <div style="display:flex;gap:4px;margin-top:4px">
+            <button class="ghost" onclick="editContract('${esc(c.id)}')" data-tip="تعديل" style="padding:4px 6px;font-size:11px">✏️</button>
+            <button class="ghost" onclick="reactivateContract('${esc(c.id)}')" data-tip="إعادة تفعيل" style="padding:4px 6px;color:var(--accent2);font-size:11px">♻️</button>
+            <button class="ghost" onclick="deleteContract('${esc(c.id)}')" data-tip="حذف نهائي" style="padding:4px 6px;color:var(--red2);font-size:11px">🗑️</button>
+          </div>` : '';
+
+    return `<tr>
         <td class="td-main td-mono">#${esc(c.id)}</td>
-        <td>${esc(c.owner)}</td>
+        <td>
+          ${esc(c.owner)}
+          ${attachmentsHtml ? `<div style="margin-top:6px">${attachmentsHtml}</div>` : ''}
+        </td>
+        <td style="font-size:12px">${esc(c.location) || '—'}</td>
         <td><span class="tag info">${esc(c.type)}</span></td>
         <td style="font-size:12px">${esc(c.engName) || '—'}</td>
         <td class="td-mono">${fmt(c.value)}</td>
@@ -1217,10 +1265,7 @@ function refreshArchive() {
         <td style="font-size:12px">${esc(c.end) || '—'}</td>
         <td>
           <span class="tag ${stCls}" style="font-size:11px;padding:3px 8px;white-space:nowrap">${esc(c.status)}</span>
-          <div style="display:flex;gap:4px;margin-top:4px">
-            <button class="ghost" onclick="reactivateContract('${esc(c.id)}')" data-tip="إعادة تفعيل" style="padding:4px 6px;color:var(--accent2);font-size:11px">♻️</button>
-            <button class="ghost" onclick="deleteContract('${esc(c.id)}')" data-tip="حذف نهائي" style="padding:4px 6px;color:var(--red2);font-size:11px">🗑️</button>
-          </div>
+          ${archiveActions}
         </td>
       </tr>`;
     }).join('');
@@ -1265,8 +1310,8 @@ function refreshArchive() {
 }
 
 function renderCentralArchive() {
-  const filter = (document.getElementById('arch-docs-search')?.value || '').toLowerCase().trim();
-  const type   = (document.getElementById('arch-docs-type')?.value || '');
+  const filter = ((document.getElementById('arch-docs-search') || {}).value || '').toLowerCase().trim();
+  const type   = ((document.getElementById('arch-docs-type') || {}).value || '');
   const listEl = document.getElementById('centralDocsList');
   if (!listEl) return;
 
@@ -1275,7 +1320,8 @@ function renderCentralArchive() {
     'مخططات': ['drawing'],
     'صور': ['photo_before','photo_after'],
     'مراسلات': ['general'],
-    'أخرى': ['general']
+    'أخرى': ['general','contract'],
+    'عقد': ['contract']
   };
   const docs = files.filter(f => {
     const title = (f.name || '').toLowerCase();
@@ -1303,6 +1349,90 @@ function renderCentralArchive() {
         <button class="ghost" onclick="deleteFile('${esc(doc.id)}')" style="color:var(--red2)">حذف</button>
       </div>
     </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ENGINEERS MANAGEMENT
+// ═══════════════════════════════════════════════
+function renderEngineerSelect() {
+  const sel = document.getElementById('f-eng-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">اختر مهندساً</option>' + engineers.map(e => `<option value="${esc(e.name)}">${esc(e.name)} — ${esc(e.specialty||'')}</option>`).join('');
+}
+
+function renderEngineersTable() {
+  const el = document.getElementById('engineersTable');
+  if (!el) return;
+  if (!engineers.length) {
+    el.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:30px">لا توجد مهندسين مسجلين</td></tr>';
+    return;
+  }
+  el.innerHTML = engineers.map((en, i) => `
+    <tr>
+      <td class="td-mono">${esc(en.id)}</td>
+      <td>${esc(en.name)}</td>
+      <td>${esc(en.specialty||'—')}</td>
+      <td>${esc(en.phone||'—')}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="ghost" onclick="editEngineer('${esc(en.id)}')">✏️</button>
+          <button class="ghost" onclick="deleteEngineer('${esc(en.id)}')" style="color:var(--red2)">🗑️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function openNewEngineer() {
+  document.getElementById('engineerModalTitle').textContent = '➕ إضافة مهندس جديد';
+  document.getElementById('e-id').value = 'ENG-' + Date.now().toString().slice(-6);
+  document.getElementById('e-name').value = '';
+  document.getElementById('e-specialty').value = '';
+  document.getElementById('e-phone').value = '';
+  document.getElementById('e-idnum').value = '';
+  document.getElementById('e-reg').value = '';
+  document.getElementById('engineerModal').classList.add('open');
+}
+
+function editEngineer(id) {
+  const en = engineers.find(x => x.id === id);
+  if (!en) return;
+  document.getElementById('engineerModalTitle').textContent = '✏️ تعديل بيانات المهندس';
+  document.getElementById('e-id').value = en.id;
+  document.getElementById('e-name').value = en.name;
+  document.getElementById('e-specialty').value = en.specialty || '';
+  document.getElementById('e-phone').value = en.phone || '';
+  document.getElementById('e-idnum').value = en.idNumber || '';
+  document.getElementById('e-reg').value = en.regNumber || '';
+  document.getElementById('engineerModal').classList.add('open');
+}
+
+function saveEngineer() {
+  const id = document.getElementById('e-id').value.trim();
+  const name = document.getElementById('e-name').value.trim();
+  if (!id || !name) { showToast('⚠️ رقم السجل واسم المهندس مطلوبان', 'warn'); return; }
+  const idx = engineers.findIndex(x => x.id === id);
+  const obj = {
+    id, name, specialty: document.getElementById('e-specialty').value.trim(),
+    phone: document.getElementById('e-phone').value.trim(),
+    idNumber: document.getElementById('e-idnum').value.trim(),
+    regNumber: document.getElementById('e-reg').value.trim()
+  };
+  if (idx >= 0) engineers[idx] = obj; else engineers.push(obj);
+  saveData();
+  renderEngineersTable();
+  renderEngineerSelect();
+  closeModal('engineerModal');
+  showToast('✅ تم حفظ بيانات المهندس');
+}
+
+function deleteEngineer(id) {
+  showConfirm('حذف مهندس', 'هل أنت متأكد من حذف هذا المهندس؟', () => {
+    engineers = engineers.filter(e => e.id !== id);
+    saveData();
+    renderEngineersTable();
+    renderEngineerSelect();
+    showToast('🗑️ تم حذف المهندس');
+  });
 }
 
 function openRenewLicenseModal(id) {
@@ -1341,7 +1471,7 @@ function exportArchive() {
     rows.push([c.id, c.owner, c.status, c.type, c.engName || '', c.value, paid, remain, c.end || '']);
   });
 
-  const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv  = rows.map(r => r.map(v => `"${String(v != null ? v : '').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
@@ -1461,7 +1591,9 @@ function refreshAll() {
     if (c.status !== 'نشط') return false;
     const cv = visits.filter(v => v.contractId === c.id);
     if (!cv.length) return true;
-    const last = new Date(cv[0].date);
+    const lastVisitTime = Math.max(...cv.map(v => new Date(v.date).getTime()));
+    if (!isFinite(lastVisitTime)) return true;
+    const last = new Date(lastVisitTime);
     return Math.round((today - last) / 86400000) > 30;
   }).length;
   document.getElementById('td-novisit').textContent = noVisit;
@@ -1484,6 +1616,7 @@ function refreshAll() {
   const licWarn = contracts.filter(c => c.licExpiry && daysUntil(c.licExpiry) <= 30 && daysUntil(c.licExpiry) >= 0).length;
   if (licWarn  > 0) alerts.push(`<div class="alert warn"><div>📄</div><div><strong>${licWarn} رخصة بناء</strong> تنتهي قريباً</div></div>`);
   document.getElementById('dashAlerts').innerHTML = alerts.join('');
+  try { renderEngineerSelect(); } catch(e) { /* ignore */ }
 
   // أحدث العقود
   const recent = [...contracts].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
@@ -1495,36 +1628,17 @@ function refreshAll() {
       const paid  = (c.payments || []).reduce((s, p) => s + p.amount, 0);
       const p2    = c.value > 0 ? Math.round(paid / c.value * 100) : 0;
       const stCls = { نشط:'active', مكتمل:'done', مجمّد:'frozen', منتهي:'ended' }[c.status] || 'info';
-      return `<tr>
-        <td class="td-mono">#${esc(c.id)}</td>
-        <td class="td-main">${esc(c.owner)}</td>
-        <td><span class="tag info">${esc(c.type)}</span></td>
-        <td><span class="tag ${stCls}">${esc(c.status)}</span></td>
-        <td>
-          <div style="display:flex;align-items:center;gap:6px">
-            <div class="progress-bar" style="width:60px"><div class="progress-fill ${p2>=80?'g':p2>=50?'a':'r'}" style="width:${p2}%"></div></div>
-            <span style="font-size:11px;font-family:var(--mono)">${p2}%</span>
-          </div>
-        </td>
-      </tr>`;
+      return `
+        <tr>
+          <td class="td-main td-mono">#${esc(c.id)}</td>
+          <td>${esc(c.owner)}</td>
+          <td><span class="tag ${stCls}">${esc(c.status)}</span></td>
+          <td>${esc(c.engName) || '—'}</td>
+          <td class="td-mono">${fmtShort(paid)} / ${fmtShort(c.value)}</td>
+          <td>${esc(c.end) || '—'}</td>
+        </tr>`;
     }).join('');
   }
-
-  // عداد الشريط الجانبي
-  document.getElementById('sc-contracts').textContent = contracts.filter(c => c.status === 'نشط').length;
-  document.getElementById('sc-visits').textContent    = visits.filter(v => v.date === today.toISOString().split('T')[0]).length;
-  document.getElementById('sc-invoices').textContent  = invoices.filter(i => i.status !== 'مدفوعة').length;
-  document.getElementById('sc-files').textContent     = files.length;
-
-  // فلتر المهندسين
-  const engs  = [...new Set(contracts.map(c => c.engName).filter(Boolean))];
-  const fEng  = document.getElementById('fEng');
-  if (fEng) fEng.innerHTML = '<option value="">كل المهندسين</option>' + engs.map(e => `<option>${esc(e)}</option>`).join('');
-
-  // تحديث الرسم البياني الشهري
-  updateMonthlyChart();
-
-  renderContractsTable();
 }
 
 // ═══════════════════════════════════════════════
@@ -1643,7 +1757,7 @@ function exportReportCsv() {
       rows.push([c.id, c.owner, c.status, c.type, c.value, paid, (parseFloat(c.value) || 0) - paid, c.end || '']);
     });
   }
-  const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv  = rows.map(r => r.map(v => `"${String(v != null ? v : '').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
@@ -1666,7 +1780,7 @@ function exportAudit() {
   auditLogs.forEach(l => {
     rows.push([new Date(l.time).toLocaleString('en-US'), l.user, l.type, l.msg]);
   });
-  const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv  = rows.map(r => r.map(v => `"${String(v != null ? v : '').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
@@ -1689,7 +1803,8 @@ function printPledge() {
   const plot  = document.getElementById('tpl-plot').value.trim();
   const comp  = document.getElementById('tpl-comp').value.trim();
   const lic   = document.getElementById('f-buildLic').value.trim();
-  const eng   = document.getElementById('f-engName').value.trim();
+  const engEl = document.getElementById('f-eng-select');
+  const eng   = (engEl && engEl.value) ? engEl.value.trim() : (document.getElementById('f-engName') ? document.getElementById('f-engName').value.trim() : '');
   const engReg = document.getElementById('f-engReg').value.trim();
 
   const w = window.open('', '_blank', 'width=800,height=700');
@@ -1944,8 +2059,8 @@ function renderUserAccounts() {
     container.innerHTML = `<div style="font-size:12px;color:var(--text3)">${esc(noUsersText)}</div>`;
     return;
   }
-  const changeText = TRANSLATIONS[currentLang]?.changePasswordButton || 'تغيير كلمة المرور';
-  const deleteText = TRANSLATIONS[currentLang]?.deleteButton || 'حذف';
+  const changeText = (TRANSLATIONS[currentLang] && TRANSLATIONS[currentLang].changePasswordButton) || 'تغيير كلمة المرور';
+  const deleteText = (TRANSLATIONS[currentLang] && TRANSLATIONS[currentLang].deleteButton) || 'حذف';
   container.innerHTML = cloudUsers.map(user => {
     const roleLabel = currentLang === 'en'
       ? ROLE_LABELS_EN[user.role]
@@ -2220,6 +2335,7 @@ function saveData(syncCloud = true) {
     if (k === 'invoices') val = invoices;
     if (k === 'files') val = files;
     if (k === 'drawingVersions') val = drawingVersions;
+    if (k === 'engineers') val = engineers;
     if (val) localStorage.setItem(k, JSON.stringify(val));
   });
 
@@ -2246,7 +2362,7 @@ function closeConfirm() { document.getElementById('confirmOverlay').classList.re
 function exportData() {
   const payload = {
     meta: { app:'almuheet-contract-system', version:'2.0.0', exportedAt: new Date().toISOString() },
-    contracts, visits, auditLogs, passwords, invoices, files, drawingVersions
+    contracts, visits, auditLogs, passwords, invoices, files, drawingVersions, engineers
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json;charset=utf-8' });
   const a    = document.createElement('a');
@@ -2557,8 +2673,8 @@ function handleFileUpload(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
 
-  const contractId = document.getElementById('upload-contract')?.value || null;
-  const fileType = document.getElementById('upload-type')?.value || 'general';
+  const contractId = ((document.getElementById('upload-contract') || {}).value) || null;
+  const fileType = ((document.getElementById('upload-type') || {}).value) || 'general';
 
   uploadFile(file, contractId, fileType);
   closeModal('uploadModal');
@@ -2614,7 +2730,7 @@ function handleImportFile(event) {
         buildNotifications();
         showToast('✅ تم استيراد البيانات بنجاح');
       });
-    } catch {
+    } catch (e) {
       showToast('⚠️ ملف غير صالح للاستيراد', 'warn');
     }
   };

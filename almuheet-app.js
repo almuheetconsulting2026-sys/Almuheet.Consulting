@@ -20,6 +20,7 @@ let officeSettings = {};
 let currentUser        = null;
 let currentRole        = 'admin';
 let editingId          = null;
+let editingVisitId     = null;
 let pendingPayments    = [];
 let pendingStages      = [];
 let confirmCallback    = null;
@@ -34,13 +35,13 @@ const STORAGE_KEYS = ['contracts','visits','auditLogs','passwords','invoices','f
 
 // صلاحيات مفصّلة: تعديل العقود يحتاج صلاحية contracts.edit
 const ROLE_PERMISSIONS = {
-  admin:      ['contracts.edit','contracts.delete','settings.passwords','settings.reset','audit.export','visits.add'],
+  admin:      ['contracts.edit','contracts.delete','settings.passwords','settings.reset','audit.export','visits.add','visits.edit','visits.delete'],
   engineer:   ['contracts.edit','visits.add'],
   accountant: ['audit.export']
 };
 
 const DEFAULT_ROLE_PERMISSIONS = {
-  admin:      ['contracts.edit','contracts.delete','settings.passwords','settings.reset','audit.export','visits.add'],
+  admin:      ['contracts.edit','contracts.delete','settings.passwords','settings.reset','audit.export','visits.add','visits.edit','visits.delete'],
   engineer:   ['contracts.edit','visits.add'],
   accountant: ['audit.export']
 };
@@ -541,12 +542,17 @@ function showPage(id, topBtn, sideBtn) {
   document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
   if (topBtn)  topBtn.classList.add('active');
   if (sideBtn) sideBtn.classList.add('active');
-  if (id === 'archive')  refreshArchive();
+
+  if (id === 'dashboard') refreshAll();
+  if (id === 'contracts') renderContractsTable();
   if (id === 'payments') refreshPayments();
   if (id === 'visits')   refreshVisitsPage();
+  if (id === 'archive')  refreshArchive();
   if (id === 'invoices') refreshInvoices();
   if (id === 'files')    refreshFiles();
   if (id === 'engineers') renderEngineersTable();
+  if (id === 'settings') loadSettings();
+
   closeNotif();
 }
 
@@ -995,32 +1001,81 @@ async function saveVisit() {
     report:    document.getElementById('v-report').value,
     notes:     document.getElementById('v-notes').value,
     attachments: [],
-    id:        Date.now()
+    id:        editingVisitId || Date.now()
   };
 
-  // معالجة الملفات المرفوعة مع الزيارة
+  const existingAttachments = editingVisitId ? (visits.find(x => x.id === editingVisitId) || {}).attachments || [] : [];
+  const attachments = [...existingAttachments];
   const fileInput = document.getElementById('v-files');
   if (fileInput && fileInput.files && fileInput.files.length) {
     for (const f of Array.from(fileInput.files)) {
       const uploaded = await uploadFile(f, contractId, 'visit');
-      if (uploaded && uploaded.id) v.attachments.push(uploaded.id);
+      if (uploaded && uploaded.id) attachments.push(uploaded.id);
     }
   }
+  v.attachments = attachments;
+  if (editingVisitId) {
+    const idx = visits.findIndex(x => x.id === editingVisitId);
+    if (idx > -1) {
+      visits[idx] = v;
+      addAudit('edit', `تعديل الزيارة للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
+      showToast('✅ تم تعديل الزيارة بنجاح');
+    } else {
+      visits.unshift(v);
+      addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
+      showToast('✅ تم تسجيل الزيارة');
+    }
+  } else {
+    visits.unshift(v);
+    addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
+    showToast('✅ تم تسجيل الزيارة');
+  }
 
-  visits.unshift(v);
-  addAudit('create', `زيارة ميدانية للعقد #${contractId} — ${v.stage} (${v.pct}%)`);
   saveData();
+  editingVisitId = null;
   closeModal('visitModal');
   refreshVisitsPage();
   buildNotifications();
-  showToast('✅ تم تسجيل الزيارة');
+}
+
+function editVisit(id) {
+  if (!hasPermission('visits.edit')) { showToast('⛔ لا تملك صلاحية تعديل الزيارات', 'warn'); return; }
+  const v = visits.find(x => x.id === id);
+  if (!v) return;
+  editingVisitId = id;
+  const sel = document.getElementById('v-contract');
+  sel.innerHTML = '<option value="">اختر عقداً</option>' +
+    contracts.filter(c => c.status === 'نشط' || c.id === v.contractId).map(c => `<option value="${esc(c.id)}">#${esc(c.id)} — ${esc(c.owner)}</option>`).join('');
+  document.getElementById('v-contract').value = v.contractId;
+  document.getElementById('v-date').value     = v.date || new Date().toISOString().split('T')[0];
+  document.getElementById('v-eng').value      = v.engineer || '';
+  document.getElementById('v-stage').value    = v.stage || '';
+  document.getElementById('v-pct').value      = v.pct || 0;
+  document.getElementById('v-violation').value = v.violation || '';
+  document.getElementById('v-report').value   = v.report || '';
+  document.getElementById('v-notes').value    = v.notes || '';
+  const fileInput = document.getElementById('v-files');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('visitModal').classList.add('open');
+}
+
+function deleteVisit(id) {
+  if (!hasPermission('visits.delete')) { showToast('⛔ لا تملك صلاحية حذف الزيارات', 'warn'); return; }
+  showConfirm('حذف الزيارة', 'هل أنت متأكد من حذف هذه الزيارة؟ لا يمكن التراجع عن هذا الإجراء.', () => {
+    visits = visits.filter(x => x.id !== id);
+    addAudit('delete', `حذف زيارة عقد #${id}`);
+    saveData();
+    refreshVisitsPage();
+    buildNotifications();
+    showToast('🗑️ تم حذف الزيارة');
+  });
 }
 
 function refreshVisitsPage() {
   const tb       = document.getElementById('visitsTable');
   const archVis  = document.getElementById('archVisitsTable');
   if (!visits.length) {
-    const empty = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:30px">لا توجد زيارات مسجلة</td></tr>';
+    const empty = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">لا توجد زيارات مسجلة</td></tr>';
     if (tb)      tb.innerHTML      = empty;
     if (archVis) archVis.innerHTML = empty;
     document.getElementById('visitProgress').innerHTML   = '<div style="text-align:center;color:var(--text3);padding:20px;font-size:13px">لا توجد زيارات مسجلة</div>';
@@ -1052,6 +1107,7 @@ function refreshVisitsPage() {
       <td>${esc(v.engineer) || '—'}</td>
       <td>${v.violation ? `<span class="tag warn">⚠️ ${esc(v.violation)}</span>` : '<span style="color:var(--text3);font-size:12px">لا توجد</span>'}</td>
       <td style="font-size:12px;color:var(--text3)">${esc((v.notes || '').substring(0,40))}${attachHtml?'<div style="margin-top:6px">'+attachHtml+'</div>':''}</td>
+      <td>${hasPermission('visits.edit') || hasPermission('visits.delete') ? `${hasPermission('visits.edit') ? `<button class="ghost" onclick="editVisit(${v.id})" style="padding:4px 6px;font-size:11px">✏️</button>` : ''}${hasPermission('visits.delete') ? `<button class="ghost" onclick="deleteVisit(${v.id})" style="padding:4px 6px;font-size:11px;color:var(--red2)">🗑️</button>` : ''}` : ''}</td>
     </tr>`;
   }).join('');
   if (tb)      tb.innerHTML      = rows;

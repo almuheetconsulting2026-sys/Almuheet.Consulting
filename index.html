@@ -13,6 +13,12 @@
       document.head.insertBefore(b, document.head.firstChild);
     })();
   </script>
+  <script>
+    // Redirect GitHub Pages root directly to the enhanced app page
+    if (window.location.pathname === '/' || window.location.pathname.endsWith('/index.html')) {
+      window.location.replace('./almuheet-enhanced.html');
+    }
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>نظام المحيط - منصة التشغيل</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232da876'/%3E%3C/svg%3E">

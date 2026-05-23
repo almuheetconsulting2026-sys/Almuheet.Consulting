@@ -832,6 +832,9 @@ async function saveContract() {
   closeModal('contractModal');
   refreshAll();
   buildNotifications();
+  renderContractsTable();
+  refreshArchive();
+  refreshPayments();
   showToast('✅ تم حفظ العقد بنجاح');
 }
 
@@ -842,6 +845,9 @@ function deleteContract(id) {
     addAudit('delete', `حذف العقد #${id}`);
     saveData();
     refreshAll();
+    renderContractsTable();
+    refreshArchive();
+    refreshPayments();
     buildNotifications();
     showToast('🗑️ تم حذف العقد');
   });
@@ -881,7 +887,11 @@ function reactivateContract(id) {
   if (!c) return;
   c.status = 'نشط';
   addAudit('edit', `إعادة تفعيل العقد #${id}`);
-  saveData(); refreshAll(); refreshArchive();
+  saveData();
+  refreshAll();
+  renderContractsTable();
+  refreshArchive();
+  refreshPayments();
   buildNotifications();
   showToast('✅ تم إعادة تفعيل العقد');
 }
@@ -1599,6 +1609,7 @@ function refreshAll() {
     return Math.round((today - last) / 86400000) > 30;
   }).length;
   document.getElementById('td-novisit').textContent = noVisit;
+  refreshSidebarCounts();
 
   // إحصاء الحالات
   const sc = { نشط:0, مكتمل:0, مجمّد:0, منتهي:0 };
@@ -1619,6 +1630,7 @@ function refreshAll() {
   if (licWarn  > 0) alerts.push(`<div class="alert warn"><div>📄</div><div><strong>${licWarn} رخصة بناء</strong> تنتهي قريباً</div></div>`);
   document.getElementById('dashAlerts').innerHTML = alerts.join('');
   try { renderEngineerSelect(); } catch(e) { /* ignore */ }
+  refreshSidebarCounts();
 
   // أحدث العقود
   const recent = [...contracts].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
@@ -1641,6 +1653,17 @@ function refreshAll() {
         </tr>`;
     }).join('');
   }
+}
+
+function refreshSidebarCounts() {
+  const contractEl = document.getElementById('sc-contracts');
+  if (contractEl) contractEl.textContent = contracts.length;
+  const visitsEl = document.getElementById('sc-visits');
+  if (visitsEl) visitsEl.textContent = visits.length;
+  const invoicesEl = document.getElementById('sc-invoices');
+  if (invoicesEl) invoicesEl.textContent = invoices.length;
+  const filesEl = document.getElementById('sc-files');
+  if (filesEl) filesEl.textContent = files.length;
 }
 
 // ═══════════════════════════════════════════════

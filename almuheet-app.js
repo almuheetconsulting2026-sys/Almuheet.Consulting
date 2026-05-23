@@ -74,6 +74,7 @@ const TRANSLATIONS = {
     sidebarPayments: 'Payments',
     sidebarSectionField: 'Field',
     sidebarSectionManagement: 'Management',
+    sidebarEngineers: 'Engineers',
     sidebarSettings: 'Settings',
     settingsTitle: 'Settings',
     passwordsTitle: 'Passwords',
@@ -1866,10 +1867,10 @@ function saveSettings() {
 function loadSettings() {
   const s = (officeSettings && Object.keys(officeSettings).length) ? officeSettings : {};
   if (!officeSettings || !Object.keys(officeSettings).length) officeSettings = s;
-  if (document.getElementById('set-nameAr')) document.getElementById('set-nameAr').value = s.nameAr || '';
-  if (document.getElementById('set-nameEn')) document.getElementById('set-nameEn').value = s.nameEn || '';
-  if (document.getElementById('set-licNo'))  document.getElementById('set-licNo').value  = s.licNo || '';
-  if (document.getElementById('set-phones')) document.getElementById('set-phones').value = s.phones || '';
+  if (document.getElementById('set-nameAr') && typeof s.nameAr !== 'undefined') document.getElementById('set-nameAr').value = s.nameAr;
+  if (document.getElementById('set-nameEn') && typeof s.nameEn !== 'undefined') document.getElementById('set-nameEn').value = s.nameEn;
+  if (document.getElementById('set-licNo') && typeof s.licNo !== 'undefined')  document.getElementById('set-licNo').value  = s.licNo;
+  if (document.getElementById('set-phones') && typeof s.phones !== 'undefined') document.getElementById('set-phones').value = s.phones;
   // Apply UI preferences if present in cloud-backed officeSettings
   if (s.theme) document.documentElement.setAttribute('data-theme', s.theme);
   if (s.appLang) setLanguage(s.appLang);
